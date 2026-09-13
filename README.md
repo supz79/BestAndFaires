@@ -63,3 +63,7 @@ La logica delle partite e dei voti non è ancora migrata da localStorage.
 Questa versione carica Firebase App, Authentication e Firestore prima dei moduli
 `firebase.js`, `auth.js` e `app.js`. Il login utilizza Firebase Authentication
 (email/password) e verifica il profilo `users/{UID}`.
+
+
+## Beta.4 - Ruoli UI
+La UI ora distingue Admin e Player: il Player non può modificare la distinta né aprire la sezione Amministrazione. La protezione definitiva dei dati resta affidata alle Security Rules Firestore.

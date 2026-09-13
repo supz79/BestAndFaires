@@ -7,6 +7,8 @@ const loginMsg = document.querySelector('#loginMsg');
 const roleBtn = document.querySelector('#roleBtn');
 
 function showAuthenticatedArea(userData) {
+  window.currentUserData = userData;
+  if (typeof window.applyRolePermissions === 'function') window.applyRolePermissions(userData);
   loginScreen.classList.remove('active');
   dashboardScreen.classList.add('active');
   const name = userData?.nome || userData?.displayName || firebase.auth().currentUser?.email || 'Utente';
