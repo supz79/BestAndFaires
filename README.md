@@ -32,3 +32,19 @@ Per pubblicare su GitHub Pages:
 - creare un repository;
 - caricare i file;
 - Settings → Pages → Deploy from branch.
+
+
+## Beta.2 - Collegamento Firebase
+
+Beta.2 mantiene invariata la logica della Beta.1 e il salvataggio locale in localStorage.
+È stato aggiunto il collegamento al progetto Firebase `bestandfaires` tramite Firebase Web SDK
+(Auth e Firestore inclusi nel caricamento del client).
+
+Prima di pubblicare/testare Beta.2, aprire `js/firebase.js` e sostituire:
+
+`YOUR_API_KEY`
+
+con la Web API Key presente nelle impostazioni del progetto Firebase.
+
+In questa fase non vengono ancora letti o scritti dati su Firestore e non viene modificata
+l'autenticazione della Beta.1. Il passaggio successivo sarà collegare l'accesso utente reale.
