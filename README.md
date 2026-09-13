@@ -48,3 +48,18 @@ con la Web API Key presente nelle impostazioni del progetto Firebase.
 
 In questa fase non vengono ancora letti o scritti dati su Firestore e non viene modificata
 l'autenticazione della Beta.1. Il passaggio successivo sarà collegare l'accesso utente reale.
+
+
+## Beta.3 - Firebase Authentication
+
+Beta.3 aggiunge l'accesso reale tramite Firebase Authentication con email e password.
+Dopo l'accesso, il client legge il documento dell'utente in `users/{uid}` e verifica `active`.
+Il ruolo (`admin` o `player`) e la lega associata vengono letti da Firestore.
+La protezione reale continua a essere affidata alle Security Rules Firebase.
+La logica delle partite e dei voti non è ancora migrata da localStorage.
+
+
+## Beta.3 Auth READY
+Questa versione carica Firebase App, Authentication e Firestore prima dei moduli
+`firebase.js`, `auth.js` e `app.js`. Il login utilizza Firebase Authentication
+(email/password) e verifica il profilo `users/{UID}`.

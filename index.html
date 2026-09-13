@@ -12,11 +12,24 @@
 <body>
 <header class="topbar">
   <div class="brand"><span class="brand-mark">⚽</span><div><strong>Best&Faires</strong><small>Il voto ai migliori in campo</small></div></div>
-  <button id="roleBtn" class="ghost">Admin</button>
+  <button id="roleBtn" class="ghost">Accedi</button>
 </header>
 
 <main id="app">
-  <section id="dashboard" class="screen active">
+  <section id="login" class="screen active">
+    <div class="card login-card">
+      <div class="section-head"><div><span class="eyebrow">ACCESSO</span><h2>Accedi a Best&Faires</h2></div></div>
+      <p class="muted">Usa l'account assegnato alla tua squadra.</p>
+      <form id="loginForm">
+        <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
+        <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+        <button class="primary" type="submit">🔐 Accedi</button>
+        <p id="loginMsg" class="success"></p>
+      </form>
+    </div>
+  </section>
+
+  <section id="dashboard" class="screen">
     <div class="hero card">
       <div>
         <span class="eyebrow">LEGA</span>
@@ -85,15 +98,16 @@
     <div class="card">
       <h3>Stato partita</h3>
       <button id="resetBtn" class="danger">Reset demo Beta.1</button>
-      <p class="muted">Questa Beta.1 usa dati locali nel browser. Il collegamento a database/autenticazione reale sarà il prossimo step.</p>
+      <p class="muted">Beta.3: autenticazione Firebase collegata. I dati applicativi restano temporaneamente locali fino al prossimo step.</p>
     </div>
   </section>
 </main>
-  <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore-compat.js"></script>
 <script src="js/firebase.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/app.js"></script>
-  
 </body>
 </html>
