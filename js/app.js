@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.15 - Classifiche Player + risultati pubblici + hover partita */
+/* Best&Faires Beta.7.16 - Ricalcolo sicuro delle classifiche */
 
 let players = [];
 let matches = [];
@@ -347,6 +347,10 @@ async function syncPublicResultsForAdmin(){
 }
 
 async function calculateRanking(){
+  // Per l'Admin riallineiamo sempre gli aggregati pubblici ai voti reali
+  // prima di leggere la classifica. In questo modo eventuali cancellazioni
+  // manuali di documenti /votes non possono lasciare risultati fantasma.
+  if(isAdmin()) await syncPublicResultsForAdmin();
   const map=Object.fromEntries(players.map(p=>[p.id,{...p,points:0,votes:0,first:0,second:0,third:0}]));
   if(!currentMatch) return [];
   const activeTab=document.querySelector('.tab.active')?.dataset.tab || 'day';
@@ -387,6 +391,23 @@ async function calculateRanking(){
   return Object.values(map)
     .sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
 }
+async function recalculatePublicResults(){
+  if(!isAdmin()) return;
+  const btn=$('#recalculateResultsBtn');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Ricalcolo in corso...'; }
+  try{
+    await syncPublicResultsForAdmin();
+    await renderRanking();
+    alert('✅ Classifiche riallineate ai voti presenti in Firebase.');
+  }catch(e){
+    console.error('Ricalcolo classifiche:',e);
+    alert('❌ Impossibile ricalcolare le classifiche.');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='🔄 Ricalcola classifiche'; }
+  }
+}
+$('#recalculateResultsBtn')?.addEventListener('click',recalculatePublicResults);
+
 async function renderRanking(){
   const rows=await calculateRanking();
   const activeTab=document.querySelector('.tab.active')?.dataset.tab || 'day';
@@ -558,5 +579,5 @@ $('#dashboardMatchCard')?.addEventListener('keydown',e=>{ if((e.key==='Enter'||e
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
 let voteTimer=null;
 function startVoteTimer(){ if(voteTimer) clearInterval(voteTimer); voteTimer=setInterval(()=>{ if(currentMatch){ renderDashboard(); renderMatch(); } },1000); }
-async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Faires Beta.15: classifiche Player + partite cliccabili.');}
+async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Faires Beta.16: classifiche riallineabili e ricalcolo Admin.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};

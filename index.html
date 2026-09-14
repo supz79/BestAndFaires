@@ -127,8 +127,13 @@
       <div class="rule"><b>🔒 Segretezza</b><span>Voti visibili solo all'Admin</span></div>
     </div>
     <div class="card">
+      <h3>Classifiche</h3>
+      <p class="muted">Gli aggregati pubblici vengono ricostruiti a partire dai voti effettivamente presenti in Firebase. Usa il ricalcolo dopo eventuali interventi manuali sui documenti.</p>
+      <button id="recalculateResultsBtn" class="primary">🔄 Ricalcola classifiche</button>
+    </div>
+    <div class="card">
       <h3>Stato partita</h3>
-      <p class="muted">Beta.7: autenticazione, giocatori, partite e voti sono gestiti tramite Firebase Firestore. La sicurezza effettiva è demandata alle Security Rules.</p>
+      <p class="muted">Autenticazione, giocatori, partite e voti sono gestiti tramite Firebase Firestore. La sicurezza effettiva è demandata alle Security Rules.</p>
     </div>
   </section>
 </main>
@@ -139,6 +144,6 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/firebase.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/app.js?v=7.12"></script>
+<script src="js/app.js?v=7.16"></script>
 </body>
 </html>
