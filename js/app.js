@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.4 - Firestore + Calendario Admin */
+/* Best&Faires Beta.7.6 - Firestore + Calendario Admin */
 
 let players = [];
 let matches = [];
@@ -95,11 +95,11 @@ function renderMatch(){
   if(!currentMatch){
     $('#matchTitle').textContent='Nessuna partita caricata'; $('#rosterList').innerHTML='<p class="muted">L’Admin deve inserire una partita nel calendario.</p>'; $('#votingCard')?.classList.add('hidden'); return;
   }
-  const team=currentMatch.homeTeam||leagueTeam(), opponent=currentMatch.opponent||currentMatch.awayTeam||'Avversario';
-  const title=`${team} vs ${opponent}`;
+  const home=currentMatch.homeTeam||leagueTeam(), away=currentMatch.awayTeam||currentMatch.opponent||'Avversario';
+  const title=`${home} vs ${away}`;
   $('#matchTitle').textContent=title; const mh=$('#match h2'); if(mh) mh.textContent=title;
   const d=parseDateTime(currentMatch); const meta=$('#match .match-meta'); if(meta) meta.innerHTML=`<span>Giornata ${escapeHtml(currentMatch.day||currentMatch.giornata||'')}</span><span>${formatDateTime(d)}</span>`;
-  const dt=$('#match h3'); if(dt) dt.textContent=`Distinta ${escapeHtml(team)}`;
+  const dt=$('#match h3'); if(dt) dt.textContent=`Distinta ${escapeHtml(leagueTeam())}`;
   const box=$('#rosterList'), locked=isLineupLocked(), me=currentPlayer();
   box.innerHTML=players.map(p=>{
     const checked=lineup.includes(p.id), mine=me?.id===p.id;
@@ -180,7 +180,7 @@ function renderCalendar(){
   const grouped={Andata:[],Ritorno:[]};
   matches.forEach(m=>{const phase=String(m.fase||'').toLowerCase()==='ritorno'?'Ritorno':'Andata';grouped[phase].push(m);});
   const section=(name,arr)=>`<div class="calendar-group"><h3>${name}</h3>${arr.sort((a,b)=>(Number(a.giornata||a.day)||0)-(Number(b.giornata||b.day)||0)).map(m=>{
-    const d=parseDateTime(m), title=`${m.homeTeam||leagueTeam()} vs ${m.opponent||m.awayTeam||''}`;
+    const d=parseDateTime(m), title=`${m.homeTeam||leagueTeam()} vs ${m.awayTeam||m.opponent||''}`;
     return `<div class="calendar-row"><div><b>G${escapeHtml(m.giornata||m.day||'')}</b><span>${escapeHtml(title)}</span><small>${formatDateTime(d)}</small></div><span class="pill ${statusClass(m.status)}">${statusLabel(m.status)}</span><button class="small-btn edit-match" data-id="${escapeHtml(m.id)}">✏️ Modifica</button></div>`;
   }).join('')||'<p class="muted">Nessuna partita.</p>'}</div>`;
   box.innerHTML=section('Andata',grouped.Andata)+section('Ritorno',grouped.Ritorno);
@@ -322,5 +322,5 @@ function show(id){
 }
 $$('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
-async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7.5: Firestore + calendario caricati.');}
+async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7.6: Firestore + calendario caricati.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
