@@ -12,3 +12,7 @@ Gestione registrazioni Player e associazione Admin direttamente dall'app.
 7. L'Admin può aggiungere giocatori alla rosa direttamente dall'app.
 
 Le password non sono mai visibili all'Admin.
+
+
+## Beta 7.17.1
+Corretto il contrasto del pulsante "Registrati come Player" nella schermata di accesso: testo e bordo ora sono visibili su sfondo bianco.
