@@ -202,7 +202,7 @@ async function saveMatchEditor(e){
   e.preventDefault(); if(!isAdmin())return;
   const id=$('#matchEditId').value, date=$('#matchEditDate').value, time=$('#matchEditTime').value, home=$('#matchEditHome').value.trim(), away=$('#matchEditAway').value.trim();
   if(!date||!time||!home||!away)return alert('Compila casa, trasferta, data e ora.');
-  const scheduledStart=buildScheduledStart(date,time), data={giornata:String($('#matchEditRound').value).trim(),day:String($('#matchEditRound').value).trim(),fase:$('#matchEditPhase').value,homeTeam:home,opponent:away,scheduledStart:firebase.firestore.Timestamp.fromDate(scheduledStart),date:formatDate(scheduledStart),time:time,status:$('#matchEditStatus').value};
+  const scheduledStart=buildScheduledStart(date,time), data={giornata:String($('#matchEditRound').value).trim(),day:String($('#matchEditRound').value).trim(),fase:$('#matchEditPhase').value,homeTeam:home,awayTeam:away,opponent:leagueTeam()===home?away:home,isHome:isLocalTeamName(home),scheduledStart:firebase.firestore.Timestamp.fromDate(scheduledStart),date:formatDate(scheduledStart),time:time,status:$('#matchEditStatus').value};
   try{
     if(id){
       const old=matches.find(m=>m.id===id); if(old&&matchHasStarted(old)&&old.status==='voting_open'&&old.scheduledStart){
@@ -253,9 +253,11 @@ function parseExcelRows(workbook){
   return rows;
 }
 function localAndOpponent(row){
-  if(isLocalTeamName(row.casa)) return {isHome:true,home:leagueTeam(),opponent:row.trasferta};
-  if(isLocalTeamName(row.trasferta)) return {isHome:false,home:leagueTeam(),opponent:row.casa};
-  return {isHome:null,home:row.casa,opponent:row.trasferta};
+  // Manteniamo l'ordine reale della partita del calendario.
+  // isHome indica invece se la squadra della lega è la squadra di casa.
+  if(isLocalTeamName(row.casa)) return {isHome:true,home:row.casa,away:row.trasferta,opponent:row.trasferta};
+  if(isLocalTeamName(row.trasferta)) return {isHome:false,home:row.casa,away:row.trasferta,opponent:row.casa};
+  return {isHome:null,home:row.casa,away:row.trasferta,opponent:row.trasferta};
 }
 function renderImportPreview(rows){
   const box=$('#importPreview'); if(!box)return;
@@ -291,7 +293,7 @@ async function commitImport(){
   try{
     let created=0,updated=0;
     for(const r of calendarDraft){
-      const loc=r.loc; const d=r.date; const data={calendarKey:r.calendarKey,leagueId:leagueId(),giornata:String(r.giornata),day:String(r.giornata),fase:r.fase,homeTeam:loc.home,opponent:loc.opponent,isHome:loc.isHome,scheduledStart:firebase.firestore.Timestamp.fromDate(d),date:formatDate(d),time:`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
+      const loc=r.loc; const d=r.date; const data={calendarKey:r.calendarKey,leagueId:leagueId(),giornata:String(r.giornata),day:String(r.giornata),fase:r.fase,homeTeam:loc.home,awayTeam:loc.away,opponent:loc.opponent,isHome:loc.isHome,scheduledStart:firebase.firestore.Timestamp.fromDate(d),date:formatDate(d),time:`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
       const old=existingMap.get(r.calendarKey);
       if(old){
         const oldDate=parseDateTime(old); const changed=!oldDate||oldDate.getTime()!==d.getTime();
@@ -320,5 +322,5 @@ function show(id){
 }
 $$('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
-async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7.1: Firestore + calendario caricati.');}
+async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7.5: Firestore + calendario caricati.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
