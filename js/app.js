@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.3 - Firestore + Calendario Admin */
+/* Best&Faires Beta.7.4 - Firestore + Calendario Admin */
 
 let players = [];
 let matches = [];
@@ -247,7 +247,7 @@ function parseExcelRows(workbook){
       const trasferta=String(r?.[2]??'').trim();
       const d=excelSerialToDate(r?.[3]);
       if(!/^\d+$/.test(giornata)||!casa||!trasferta||!d||Number.isNaN(d.getTime()))return;
-      rows.push({fase,giornata,casa,trasferta,date:d});
+      rows.push({fase:phase,giornata,casa,trasferta,date:d});
     });
   });
   return rows;
