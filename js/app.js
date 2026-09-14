@@ -220,7 +220,23 @@ async function loadOwnVoteState(){
 }
 function populateVotes(){
   const me=currentPlayer(), eligible=players.filter(p=>lineup.includes(p.id)&&p.id!==me?.id);
-  [1,2,3].forEach(n=>{const s=$('#vote'+n); s.innerHTML='<option value="">Seleziona...</option>'+eligible.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(playerName(p))}</option>`).join(''); s.disabled=localVoted;});
+
+  // Il timer aggiorna la schermata ogni secondo. Prima di ricostruire i
+  // menu salviamo quindi le selezioni correnti, altrimenti il loro valore
+  // verrebbe azzerato ad ogni aggiornamento.
+  const selected={};
+  [1,2,3].forEach(n=>{
+    const current=$('#vote'+n);
+    if(current) selected[n]=current.value;
+  });
+
+  [1,2,3].forEach(n=>{
+    const s=$('#vote'+n);
+    if(!s) return;
+    s.innerHTML='<option value="">Seleziona...</option>'+eligible.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(playerName(p))}</option>`).join('');
+    if(selected[n] && eligible.some(p=>p.id===selected[n])) s.value=selected[n];
+    s.disabled=localVoted;
+  });
   $('#submitVote').disabled=localVoted; $('#voteMsg').textContent=localVoted?'✅ Voto già registrato per questo account.':'';
 }
 $('#submitVote')?.addEventListener('click',async()=>{
