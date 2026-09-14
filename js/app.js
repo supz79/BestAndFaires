@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7 - Firestore + Calendario Admin */
+/* Best&Faires Beta.7.3 - Firestore + Calendario Admin */
 
 let players = [];
 let matches = [];
@@ -218,19 +218,35 @@ async function saveMatchEditor(e){
   }catch(err){console.error(err);alert(err.code==='permission-denied'?'❌ Firebase ha rifiutato la modifica. La partita potrebbe essere già iniziata.':'❌ Impossibile salvare la partita.');}
 }
 
+function excelSerialToDate(value){
+  if (value instanceof Date) return value;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const epoch = new Date(Date.UTC(1899,11,30));
+    const d = new Date(epoch.getTime() + value * 86400000);
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+  }
+  if (typeof value === 'string') {
+    const text=value.trim();
+    const m=text.match(/^(\d{1,2})[\\/.](\d{1,2})[\\/.](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+    if(m) return new Date(Number(m[3]),Number(m[2])-1,Number(m[1]),Number(m[4]||0),Number(m[5]||0),0);
+  }
+  return null;
+}
 function parseExcelRows(workbook){
   const rows=[]; let phase='Andata';
   workbook.SheetNames.forEach(name=>{
-    const sheet=workbook.Sheets[name], data=XLSX.utils.sheet_to_json(sheet,{header:1,raw:true});
+    const sheet=workbook.Sheets[name];
+    const data=XLSX.utils.sheet_to_json(sheet,{header:1,raw:true,defval:null});
     data.forEach(r=>{
-      const first=String(r[0]??'').trim().toUpperCase();
-      if(first==='ANDATA'){phase='Andata';return;} if(first==='RITORNO'){phase='Ritorno';return;}
-      if(!r[0]||String(r[0]).toUpperCase()==='GIORNATA')return;
-      const giornata=String(r[0]).trim(), casa=String(r[1]??'').trim(), trasferta=String(r[2]??'').trim(), rawDate=r[3];
-      if(!giornata||!casa||!trasferta||!rawDate)return;
-      let d=rawDate instanceof Date?rawDate:XLSX.SSF.parse_date_code(rawDate);
-      if(!(rawDate instanceof Date)&&d) d=new Date(d.y,d.m-1,d.d,d.H||0,d.M||0,d.S||0);
-      if(!(d instanceof Date)||Number.isNaN(d.getTime()))return;
+      const first=String(r?.[0]??'').trim().toUpperCase();
+      if(first==='ANDATA'){phase='Andata';return;}
+      if(first==='RITORNO'){phase='Ritorno';return;}
+      if(first==='GIORNATA')return;
+      const giornata=String(r?.[0]??'').trim();
+      const casa=String(r?.[1]??'').trim();
+      const trasferta=String(r?.[2]??'').trim();
+      const d=excelSerialToDate(r?.[3]);
+      if(!/^\d+$/.test(giornata)||!casa||!trasferta||!d||Number.isNaN(d.getTime()))return;
       rows.push({fase,giornata,casa,trasferta,date:d});
     });
   });
@@ -238,26 +254,36 @@ function parseExcelRows(workbook){
 }
 function localAndOpponent(row){
   if(isLocalTeamName(row.casa)) return {isHome:true,home:leagueTeam(),opponent:row.trasferta};
-  if(isLocalTeamName(row.trasferta)) return {isHome:false,home:row.casa,opponent:row.casa};
+  if(isLocalTeamName(row.trasferta)) return {isHome:false,home:leagueTeam(),opponent:row.casa};
   return {isHome:null,home:row.casa,opponent:row.trasferta};
 }
 function renderImportPreview(rows){
   const box=$('#importPreview'); if(!box)return;
-  const existing=new Map(matches.map(m=>[m.calendarKey, m]));
+  const existing=new Map(matches.map(m=>[m.calendarKey,m]));
   calendarDraft=rows.map(r=>{
     const k=calendarKey(r), found=existing.get(k); const loc=localAndOpponent(r);
     let type=found?'MODIFICA':'NUOVA', warning='';
-    if(loc.isHome===null) warning='Squadra di lega non riconosciuta';
+    if(loc.isHome===null) warning=`La squadra della lega "${leagueTeam()}" non è riconosciuta in questa partita`;
     return {...r,calendarKey:k,found,loc,type,warning};
   });
-  box.innerHTML=calendarDraft.map((r,i)=>`<div class="import-row"><div><b>${escapeHtml(r.fase)} G${escapeHtml(r.giornata)}</b><span>${escapeHtml(r.casa)} vs ${escapeHtml(r.trasferta)}</span><small>${formatDateTime(r.date)}</small></div><span class="import-badge ${r.type==='NUOVA'?'new':'change'}">${r.type}</span>${r.warning?`<span class="warning">⚠️ ${escapeHtml(r.warning)}</span>`:''}</div>`).join('')||'<p class="muted">Nessuna riga valida trovata.</p>';
+  box.innerHTML=calendarDraft.map(r=>`<div class="import-row"><div><b>${escapeHtml(r.fase)} G${escapeHtml(r.giornata)}</b><span>${escapeHtml(r.casa)} vs ${escapeHtml(r.trasferta)}</span><small>${formatDateTime(r.date)}</small></div><span class="import-badge ${r.type==='NUOVA'?'new':'change'}">${r.type}</span>${r.warning?`<span class="warning">⚠️ ${escapeHtml(r.warning)}</span>`:''}</div>`).join('')||'<p class="muted">Nessuna riga valida trovata.</p>';
   $('#importCommit').disabled=!calendarDraft.length||calendarDraft.some(x=>x.warning);
   $('#importPreviewCard').classList.remove('hidden');
 }
 async function handleExcel(file){
   if(!file||!isAdmin())return;
-  try{const buffer=await file.arrayBuffer(), wb=XLSX.read(buffer,{type:'array',cellDates:true});const rows=parseExcelRows(wb);renderImportPreview(rows);setCalendarMessage(`${rows.length} partite trovate. Controlla l'anteprima prima di confermare.`);}
-  catch(e){console.error(e);setCalendarMessage('❌ File Excel non valido o struttura non riconosciuta.');}
+  setCalendarMessage(`📖 Lettura di ${file.name}...`);
+  try{
+    const buffer=await file.arrayBuffer();
+    const wb=XLSX.read(buffer,{type:'array',cellDates:true});
+    const rows=parseExcelRows(wb);
+    if(!rows.length) throw new Error('Nessuna riga partita riconosciuta. Attese colonne: GIORNATA, CASA, TRASFERTA, DATA.');
+    renderImportPreview(rows);
+    setCalendarMessage(`✅ ${rows.length} partite trovate. Controlla l'anteprima prima di confermare.`);
+  }catch(e){
+    console.error('Import Excel:',e);
+    setCalendarMessage(`❌ ${e.message||'File Excel non valido o struttura non riconosciuta.'}`);
+  }
 }
 async function commitImport(){
   if(!isAdmin()||!calendarDraft.length)return;
@@ -283,9 +309,7 @@ $('#calendarList')?.addEventListener('click',e=>{const b=e.target.closest('.edit
 $('#newMatchBtn')?.addEventListener('click',()=>openMatchEditor());
 $('#cancelMatchEdit')?.addEventListener('click',closeMatchEditor); $('#closeMatchModal')?.addEventListener('click',closeMatchEditor);
 $('#matchEditForm')?.addEventListener('submit',saveMatchEditor);
-$('#excelInput')?.addEventListener('change',e=>handleExcel(e.target.files[0]));
-// Beta.7.1: listener esplicito anche tramite delegazione, utile dopo cache/DOM refresh.
-document.addEventListener('change',e=>{ if(e.target?.id==='excelInput') handleExcel(e.target.files?.[0]); });
+$('#excelInput')?.addEventListener('change',e=>handleExcel(e.target.files?.[0]));
 $('#importCommit')?.addEventListener('click',commitImport);
 $('#importCancel')?.addEventListener('click',()=>{$('#importPreviewCard').classList.add('hidden');calendarDraft=[];$('#excelInput').value='';});
 
