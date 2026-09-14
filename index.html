@@ -44,6 +44,7 @@
       <button class="action card" data-screen="ranking"><span>🏆</span><b>Classifiche</b><small>Giornata e cumulativa</small></button>
       <button class="action card" data-screen="players"><span>👥</span><b>Rosa squadra</b><small>Giocatori registrati</small></button>
       <button class="action card" data-screen="admin"><span>⚙️</span><b>Amministrazione</b><small>Gestione lega</small></button>
+      <button class="action card admin-only" data-screen="calendar"><span>📅</span><b>Calendario</b><small>Importa e modifica le partite</small></button>
     </div>
 
     <div class="card status">
@@ -85,6 +86,35 @@
     <div class="card"><div id="playersTable"></div></div>
   </section>
 
+  <section id="calendar" class="screen">
+    <div class="section-head"><button class="back" data-screen="dashboard">‹</button><div><span class="eyebrow">ADMIN</span><h2>Calendario</h2></div></div>
+    <div class="card">
+      <div class="calendar-toolbar"><div><h3>Calendario partite</h3><p class="muted">Casa/trasferta viene riconosciuta automaticamente confrontando le squadre del file con la squadra della lega.</p></div><button id="newMatchBtn" class="primary">＋ Nuova partita</button></div>
+      <div class="import-box"><label class="file-btn">📥 Importa Excel<input id="excelInput" type="file" accept=".xlsx,.xls,.csv"></label><span class="muted">Il file viene prima analizzato in anteprima.</span></div>
+      <p id="calendarMsg" class="muted"></p>
+    </div>
+    <div id="calendarList"></div>
+    <div id="importPreviewCard" class="card hidden">
+      <div class="calendar-toolbar"><div><h3>Anteprima importazione</h3><p class="muted">Le partite esistenti vengono aggiornate tramite una chiave stabile. Quelle assenti dal file non vengono cancellate.</p></div></div>
+      <div id="importPreview"></div>
+      <div class="modal-actions"><button id="importCancel" class="ghost dark">Annulla</button><button id="importCommit" class="primary">Conferma importazione</button></div>
+    </div>
+  </section>
+
+  <div id="matchModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="section-head"><div><span class="eyebrow">ADMIN</span><h2>Modifica partita</h2></div><button id="closeMatchModal" class="back">×</button></div>
+      <form id="matchEditForm">
+        <input id="matchEditId" type="hidden">
+        <div class="form-grid"><label>Giornata<input id="matchEditRound" required></label><label>Fase<select id="matchEditPhase"><option>Andata</option><option>Ritorno</option></select></label></div>
+        <div class="form-grid"><label>Casa<input id="matchEditHome" required></label><label>Trasferta<input id="matchEditAway" required></label></div>
+        <div class="form-grid"><label>Data<input id="matchEditDate" type="date" required></label><label>Ora<input id="matchEditTime" type="time" required></label></div>
+        <label>Stato<select id="matchEditStatus"><option value="scheduled">Programmata</option><option value="voting_open">Votazione aperta</option><option value="in_progress">In corso</option><option value="finished">Terminata</option><option value="postponed">Rinviata</option><option value="cancelled">Annullata</option></select></label>
+        <div class="modal-actions"><button type="button" id="cancelMatchEdit" class="ghost dark">Annulla</button><button type="submit" class="primary">Salva partita</button></div>
+      </form>
+    </div>
+  </div>
+
   <section id="admin" class="screen">
     <div class="section-head"><button class="back" data-screen="dashboard">‹</button><div><span class="eyebrow">ADMIN</span><h2>Amministrazione</h2></div></div>
     <div class="card">
@@ -97,8 +127,7 @@
     </div>
     <div class="card">
       <h3>Stato partita</h3>
-      <button id="resetBtn" class="danger">Reset demo locale</button>
-      <p class="muted">Beta.6: autenticazione, giocatori, partite e voti sono gestiti tramite Firebase Firestore. La sicurezza effettiva è demandata alle Security Rules.</p>
+      <p class="muted">Beta.7: autenticazione, giocatori, partite e voti sono gestiti tramite Firebase Firestore. La sicurezza effettiva è demandata alle Security Rules.</p>
     </div>
   </section>
 </main>
@@ -106,6 +135,7 @@
 <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/firebase.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/app.js"></script>

@@ -1,28 +1,26 @@
-# Best&Faires Beta.6
+# Best&Faires Beta.7
 
-Questa versione sostituisce la logica applicativa locale con Firebase Firestore.
+Beta.7 aggiunge al backend Firestore il primo modulo operativo di calendario.
 
-## Firebase
-- Authentication: Email/Password
-- Firestore: `bestandfaires`
-- Frontend: GitHub Pages
+## Funzioni
+- Firebase Authentication Email/Password
+- Lega, rosa, partite e voti su Firestore
+- Distinta bloccata automaticamente all'orario `scheduledStart`
+- Sblocco eccezionale Admin dopo l'inizio
+- Voto Player salvato in `matches/{matchId}/votes/{uid}`
+- Calendario Admin con importazione `.xlsx`, `.xls` o `.csv`
+- Anteprima prima della conferma
+- Riconoscimento automatico casa/trasferta rispetto alla squadra della lega
+- Chiave stabile `calendarKey` per aggiornare una partita rinviata senza crearne una duplicata
+- Le partite assenti da un nuovo import non vengono cancellate
+- Modifica manuale di giornata, fase, squadre, data, ora e stato
 
-## Dati letti
-- `leagues/{leagueId}`
-- `players` filtrati per `leagueId`
-- `matches` filtrati per `leagueId`
+## File Excel supportato
+Struttura prevista:
+- riga `ANDATA`
+- intestazioni `GIORNATA | CASA | TRASFERTA | DATA`
+- righe partita
+- riga `RITORNO`
+- stesse intestazioni e righe
 
-## Voti
-I voti vengono salvati in:
-`matches/{matchId}/votes/{voterUid}`
-
-Il documento del voto contiene esclusivamente:
-`{ ranking: [playerId1, playerId2, playerId3] }`
-
-Le Security Rules impediscono modifica/cancellazione e impediscono all'utente Player di leggere i voti.
-
-## Distinta
-La distinta è letta dal campo `lineup` della partita. Se esiste `scheduledStart`, il blocco automatico è determinato dall'orario della partita. Per le partite del calendario definitivo usare sempre un campo Firestore Timestamp `scheduledStart`.
-
-## Beta.6
-Questa beta è il primo passaggio reale verso il backend Firestore. Il prossimo modulo sarà il Calendario Admin con importazione Excel, modifica delle partite e generazione/aggiornamento di `scheduledStart`.
+Il file viene validato nell'anteprima prima della scrittura su Firestore.

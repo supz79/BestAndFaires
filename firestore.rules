@@ -32,7 +32,8 @@ service cloud.firestore {
       allow delete: if admin();
       allow update: if admin()
         && (
-          resource.data.scheduledStart == null
+          !('scheduledStart' in resource.data)
+          || resource.data.adminOverrideOpen == true
           || request.resource.data.adminOverrideOpen == true
           || request.time < resource.data.scheduledStart
         );
