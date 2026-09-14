@@ -72,8 +72,60 @@ async function loadMatches(){
   const snap = await db.collection('matches').where('leagueId','==',leagueId()).get();
   matches = snap.docs.map(d=>({id:d.id,...d.data()}));
   matches.sort((a,b)=>(parseDateTime(a)?.getTime()||0)-(parseDateTime(b)?.getTime()||0));
-  currentMatch = matches.find(m=>m.status==='voting_open') || matches.find(m=>parseDateTime(m)>=new Date()) || matches[0] || null;
+
+  // Per il Player la priorita e' la partita attualmente in corso
+  // alla quale il giocatore appartiene. Solo se non esiste, mostriamo
+  // la prossima partita futura. Questo evita di saltare una partita in
+  // corso solo perche' esiste un'altra partita piu' avanti nel calendario.
+  if(isPlayer()){
+    const meId=window.currentUserData?.playerId;
+    const activeNow=matches.filter(m=>{
+      const d=parseDateTime(m);
+      const eligible=!!meId && Array.isArray(m.lineup) && m.lineup.includes(meId);
+      const blocked=['finished','cancelled','postponed'].includes(String(m.status||''));
+      return !!d && Date.now()>=d.getTime() && eligible && !blocked;
+    });
+    activeNow.sort((a,b)=>{
+      const rank=s=>s==='voting_open'?0:(s==='in_progress'?1:2);
+      return rank(a.status)-rank(b.status) || (parseDateTime(b)?.getTime()||0)-(parseDateTime(a)?.getTime()||0);
+    });
+    const future=matches.filter(m=>{
+      const d=parseDateTime(m);
+      return !!d && d.getTime()>Date.now() && !['finished','cancelled','postponed'].includes(String(m.status||''));
+    });
+    currentMatch=activeNow[0] || future[0] || null;
+  }else{
+    currentMatch = matches.find(m=>m.status==='voting_open') || matches.find(m=>parseDateTime(m)?.getTime()>Date.now()) || matches[0] || null;
+  }
   lineup = currentMatch && Array.isArray(currentMatch.lineup) ? [...currentMatch.lineup] : [];
+}
+
+function renderDashboard(){
+  const title=$('#matchTitle'), state=$('#voteState'), progress=$('#dashboardProgress'), eyebrow=$('#matchEyebrow');
+  if(!title)return;
+  if(!currentMatch){
+    title.textContent='Nessuna partita disponibile';
+    if(eyebrow) eyebrow.textContent='PARTITA';
+    if(state){state.textContent='';state.className='pill';}
+    if(progress)progress.textContent='';
+    return;
+  }
+  const home=currentMatch.homeTeam||leagueTeam(), away=currentMatch.awayTeam||currentMatch.opponent||'Avversario';
+  title.textContent=`${home} vs ${away}`;
+  const started=matchHasStarted(currentMatch);
+  if(eyebrow) eyebrow.textContent=started ? 'PARTITA IN CORSO' : 'PROSSIMA PARTITA';
+  const meInLineup=isPlayer() && currentPlayerInLineup();
+  let label='PROGRAMMATA';
+  let cls='pill';
+  if(started && meInLineup && currentMatch.status==='voting_open') { label='VOTA ORA'; cls='pill open'; }
+  else if(started && meInLineup) { label='IN CORSO'; cls='pill'; }
+  else if(started) { label='IN CORSO'; cls='pill'; }
+  else { label='PROSSIMA'; cls='pill'; }
+  if(state){state.textContent=label;state.className=cls;}
+  if(progress){
+    const n=Array.isArray(currentMatch.lineup)?currentMatch.lineup.length:0;
+    progress.textContent=started ? `${n} giocatori in distinta` : `Distinta disponibile prima dell'inizio della partita`;
+  }
 }
 async function loadLeague(){
   const snap=await db.collection('leagues').doc(leagueId()).get();
@@ -82,7 +134,7 @@ async function loadLeague(){
 async function refresh(){
   try{
     await loadLeague(); await loadPlayers(); await loadMatches();
-    renderLeague(); renderMatch(); renderPlayers(); renderCalendar();
+    renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar();
     await renderRanking(); await loadOwnVoteState(); renderMatch();
   }catch(e){ console.error(e); const msg=$('#voteMsg'); if(msg) msg.textContent='❌ Errore nel caricamento dei dati da Firebase.'; }
 }
@@ -318,9 +370,9 @@ $('#importCancel')?.addEventListener('click',()=>{$('#importPreviewCard').classL
 function show(id){
   if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return;
   $$('.screen').forEach(x=>x.classList.remove('active')); $('#'+id)?.classList.add('active');
-  if(id==='ranking')renderRanking(); if(id==='players')renderPlayers(); if(id==='match')renderMatch(); if(id==='calendar')renderCalendar();
+  if(id==='ranking')renderRanking(); if(id==='players')renderPlayers(); if(id==='match')renderMatch(); if(id==='calendar')renderCalendar(); if(id==='dashboard')renderDashboard();
 }
 $$('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
-async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7.6: Firestore + calendario caricati.');}
+async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7.7: dashboard Player + calendario caricati.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
