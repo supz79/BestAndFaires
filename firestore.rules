@@ -1,0 +1,66 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function admin() { return signedIn() && me().role == 'admin' && me().active == true; }
+    function player() { return signedIn() && me().role == 'player' && me().active == true; }
+
+    match /users/{id} {
+      allow get: if signedIn() && (request.auth.uid == id || admin());
+      allow list: if admin();
+      allow create: if signedIn() && request.auth.uid == id && request.resource.data.role == 'player';
+      allow update: if admin() || (signedIn() && request.auth.uid == id && request.resource.data.role == resource.data.role && request.resource.data.leagueId == resource.data.leagueId && request.resource.data.playerId == resource.data.playerId);
+      allow delete: if admin();
+    }
+
+    match /leagues/{leagueId} {
+      allow get: if signedIn() && (admin() || me().leagueId == leagueId);
+      allow list: if admin();
+      allow create, update, delete: if admin();
+    }
+
+    match /players/{playerId} {
+      allow get, list: if signedIn() && me().leagueId == resource.data.leagueId;
+      allow create, update, delete: if admin();
+    }
+
+    match /matches/{matchId} {
+      allow get, list: if signedIn() && (admin() || me().leagueId == resource.data.leagueId);
+      allow create: if admin();
+      allow delete: if admin();
+      allow update: if admin()
+        && (
+          resource.data.scheduledStart == null
+          || request.resource.data.adminOverrideOpen == true
+          || request.time < resource.data.scheduledStart
+        );
+
+      match /votes/{voterUid} {
+        allow get, list: if admin();
+        allow create: if player()
+          && request.auth.uid == voterUid
+          && get(/databases/$(database)/documents/matches/$(matchId)).data.status == 'voting_open'
+          && get(/databases/$(database)/documents/matches/$(matchId)).data.scheduledStart <= request.time
+          && me().playerId in get(/databases/$(database)/documents/matches/$(matchId)).data.lineup
+          && request.resource.data.keys().hasOnly(['ranking'])
+          && request.resource.data.ranking is list
+          && request.resource.data.ranking.size() == 3
+          && request.resource.data.ranking[0] is string
+          && request.resource.data.ranking[1] is string
+          && request.resource.data.ranking[2] is string
+          && request.resource.data.ranking[0] in get(/databases/$(database)/documents/matches/$(matchId)).data.lineup
+          && request.resource.data.ranking[1] in get(/databases/$(database)/documents/matches/$(matchId)).data.lineup
+          && request.resource.data.ranking[2] in get(/databases/$(database)/documents/matches/$(matchId)).data.lineup
+          && request.resource.data.ranking[0] != request.resource.data.ranking[1]
+          && request.resource.data.ranking[0] != request.resource.data.ranking[2]
+          && request.resource.data.ranking[1] != request.resource.data.ranking[2]
+          && request.resource.data.ranking[0] != me().playerId
+          && request.resource.data.ranking[1] != me().playerId
+          && request.resource.data.ranking[2] != me().playerId;
+        allow update, delete: if false;
+      }
+    }
+  }
+}

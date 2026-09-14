@@ -33,7 +33,7 @@
     <div class="hero card">
       <div>
         <span class="eyebrow">LEGA</span>
-        <h1 id="leagueName">SIAT FC</h1>
+        <h1 id="leagueName">Best&Faires</h1>
         <p id="seasonName">Stagione 2026/27</p>
       </div>
       <div class="hero-ball">🏆</div>
@@ -47,20 +47,20 @@
     </div>
 
     <div class="card status">
-      <div><div><span class="eyebrow">PROSSIMA VOTAZIONE</span><h3 id="matchTitle">SIAT FC vs Telecom</h3></div><span id="voteState" class="pill open">APERTA</span></div>
+      <div><div><span class="eyebrow">PROSSIMA VOTAZIONE</span><h3 id="matchTitle">Caricamento partita...</h3></div><span id="voteState" class="pill open">APERTA</span></div>
       <div class="progress"><span id="voteProgress"></span></div>
       <small id="voteCount">0 / 0 giocatori hanno votato</small>
     </div>
   </section>
 
   <section id="match" class="screen">
-    <div class="section-head"><button class="back" data-screen="dashboard">‹</button><div><span class="eyebrow">PARTITA</span><h2>SIAT FC vs Telecom</h2></div></div>
+    <div class="section-head"><button class="back" data-screen="dashboard">‹</button><div><span class="eyebrow">PARTITA</span><h2>Caricamento partita...</h2></div></div>
     <div class="card">
-      <div class="match-meta"><span>Giornata 1</span><span>20/09/2026 · 15:00</span></div>
+      <div class="match-meta"><span>Giornata</span><span>Data e ora</span></div>
       <h3>Distinta SIAT FC</h3>
       <p class="muted">Solo i giocatori in distinta possono votare e ricevere voti.</p>
       <div id="rosterList" class="check-list"></div>
-      <button id="lockBtn" class="primary">🔒 Blocca distinta</button>
+      <button id="lockBtn" class="primary">🔒 Blocca distinta</button><p id="matchLockStatus" class="muted"></p>
     </div>
     <div id="votingCard" class="card hidden">
       <span class="eyebrow">VOTAZIONE</span>
@@ -97,8 +97,8 @@
     </div>
     <div class="card">
       <h3>Stato partita</h3>
-      <button id="resetBtn" class="danger">Reset demo Beta.1</button>
-      <p class="muted">Beta.3: autenticazione Firebase collegata. I dati applicativi restano temporaneamente locali fino al prossimo step.</p>
+      <button id="resetBtn" class="danger">Reset demo locale</button>
+      <p class="muted">Beta.6: autenticazione, giocatori, partite e voti sono gestiti tramite Firebase Firestore. La sicurezza effettiva è demandata alle Security Rules.</p>
     </div>
   </section>
 </main>
