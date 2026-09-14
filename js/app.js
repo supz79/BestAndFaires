@@ -46,6 +46,22 @@ function parseDateTime(match){
   return null;
 }
 function matchHasStarted(m=currentMatch){ const d = parseDateTime(m); return !!d && Date.now() >= d.getTime(); }
+function matchEndDate(m=currentMatch){
+  if(!m) return null;
+  if(m.finishedAt?.toDate) return m.finishedAt.toDate();
+  if(m.finishedAt instanceof Date) return m.finishedAt;
+  if(m.finishedAt) { const d=new Date(m.finishedAt); if(!Number.isNaN(d.getTime())) return d; }
+  return parseDateTime(m);
+}
+function votingDeadlineDate(m=currentMatch){ const end=matchEndDate(m); return end ? new Date(end.getTime()+24*60*60*1000) : null; }
+function votingWindowOpen(m=currentMatch){
+  if(!m || !matchHasStarted(m)) return false;
+  const blocked=['cancelled','postponed']; if(blocked.includes(String(m.status||''))) return false;
+  const deadline=votingDeadlineDate(m);
+  return !!deadline && Date.now() <= deadline.getTime();
+}
+function votingRemainingMs(m=currentMatch){ const d=votingDeadlineDate(m); return d ? Math.max(0,d.getTime()-Date.now()) : 0; }
+function formatCountdown(ms){ const total=Math.floor(Math.max(0,ms)/1000); const days=Math.floor(total/86400); const h=Math.floor(total%86400/3600); const min=Math.floor(total%3600/60); const sec=total%60; return `${days}g ${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
 function isLineupLocked(){
   if (!currentMatch) return true;
   if (currentMatch.adminOverrideOpen === true) return false;
@@ -117,14 +133,16 @@ function renderDashboard(){
   const meInLineup=isPlayer() && currentPlayerInLineup();
   let label='PROGRAMMATA';
   let cls='pill';
-  if(started && meInLineup && currentMatch.status==='voting_open') { label='VOTA ORA'; cls='pill open'; }
+  if(started && meInLineup && votingWindowOpen(currentMatch)) { label='VOTA ORA'; cls='pill open'; }
+  else if(started && meInLineup && !votingWindowOpen(currentMatch)) { label='VOTO SCADUTO'; cls='pill closed'; }
   else if(started && meInLineup) { label='IN CORSO'; cls='pill'; }
   else if(started) { label='IN CORSO'; cls='pill'; }
   else { label='PROSSIMA'; cls='pill'; }
   if(state){state.textContent=label;state.className=cls;}
   if(progress){
     const n=Array.isArray(currentMatch.lineup)?currentMatch.lineup.length:0;
-    progress.textContent=started ? `${n} giocatori in distinta` : `Distinta disponibile prima dell'inizio della partita`;
+    if(isPlayer() && votingWindowOpen(currentMatch)) progress.textContent=`Voto disponibile ancora per ${formatCountdown(votingRemainingMs(currentMatch))}`;
+    else progress.textContent=started ? `${n} giocatori in distinta` : `Distinta disponibile prima dell'inizio della partita`;
   }
 }
 async function loadLeague(){
@@ -164,9 +182,20 @@ function renderMatch(){
     else lockBtn.textContent=currentMatch.lineupLocked?'🔓 Sblocca distinta':'🔒 Blocca distinta';
   }else lockBtn.style.display='none';
   const status=$('#matchLockStatus');
-  if(status) status.textContent=matchHasStarted()?(currentMatch.adminOverrideOpen?'⚠️ Sblocco eccezionale Admin attivo.':'🔒 Distinta bloccata automaticamente all’inizio della partita.'):'🕒 Distinta modificabile fino all’inizio della partita.';
-  const canVote=isPlayer()&&matchHasStarted()&&currentMatch.status==='voting_open'&&currentPlayerInLineup();
+  if(status){
+    if(matchHasStarted()){
+      const deadline=votingDeadlineDate(currentMatch);
+      status.textContent=(currentMatch.adminOverrideOpen?'⚠️ Sblocco eccezionale Admin attivo. ':'🔒 Distinta bloccata automaticamente all’inizio della partita. ')+(deadline?`⏱️ Votazione disponibile fino al ${formatDateTime(deadline)}.`:'');
+    } else status.textContent='🕒 Distinta modificabile fino all’inizio della partita.';
+  }
+  const canVote=isPlayer()&&votingWindowOpen(currentMatch)&&currentPlayerInLineup();
   if(canVote){ $('#votingCard').classList.remove('hidden'); populateVotes(); } else $('#votingCard').classList.add('hidden');
+  const timer=$('#voteTimer');
+  if(timer){
+    if(isPlayer() && votingWindowOpen(currentMatch)) { timer.textContent=`⏱️ Tempo per votare: ${formatCountdown(votingRemainingMs(currentMatch))}`; timer.className='pill open'; }
+    else if(isPlayer() && matchHasStarted()) { timer.textContent='⏱️ Finestra di voto scaduta'; timer.className='pill closed'; }
+    else timer.textContent='⏱️ Il voto sarà disponibile dopo l’inizio della partita';
+  }
   updateProgress();
 }
 
@@ -195,7 +224,7 @@ function populateVotes(){
   $('#submitVote').disabled=localVoted; $('#voteMsg').textContent=localVoted?'✅ Voto già registrato per questo account.':'';
 }
 $('#submitVote')?.addEventListener('click',async()=>{
-  if(!isPlayer()||!currentMatch||!matchHasStarted()||currentMatch.status!=='voting_open'||!currentPlayerInLineup()||localVoted) return;
+  if(!isPlayer()||!currentMatch||!votingWindowOpen(currentMatch)||!currentPlayerInLineup()||localVoted) return;
   const ranking=[1,2,3].map(n=>$('#vote'+n).value), me=currentPlayer();
   if(ranking.some(x=>!x)||new Set(ranking).size!==3) return alert('Seleziona tre giocatori diversi.');
   if(ranking.some(x=>!lineup.includes(x))) return alert('Puoi votare solo giocatori presenti in distinta.');
@@ -282,7 +311,9 @@ async function saveMatchEditor(e){
   e.preventDefault(); if(!isAdmin())return;
   const id=$('#matchEditId').value, date=$('#matchEditDate').value, time=$('#matchEditTime').value, home=$('#matchEditHome').value.trim(), away=$('#matchEditAway').value.trim();
   if(!date||!time||!home||!away)return alert('Compila casa, trasferta, data e ora.');
-  const scheduledStart=buildScheduledStart(date,time), data={giornata:String($('#matchEditRound').value).trim(),day:String($('#matchEditRound').value).trim(),fase:$('#matchEditPhase').value,homeTeam:home,awayTeam:away,opponent:leagueTeam()===home?away:home,isHome:isLocalTeamName(home),scheduledStart:firebase.firestore.Timestamp.fromDate(scheduledStart),date:formatDate(scheduledStart),time:time,status:$('#matchEditStatus').value};
+  const scheduledStart=buildScheduledStart(date,time), selectedStatus=$('#matchEditStatus').value, data={giornata:String($('#matchEditRound').value).trim(),day:String($('#matchEditRound').value).trim(),fase:$('#matchEditPhase').value,homeTeam:home,awayTeam:away,opponent:leagueTeam()===home?away:home,isHome:isLocalTeamName(home),scheduledStart:firebase.firestore.Timestamp.fromDate(scheduledStart),date:formatDate(scheduledStart),time:time,status:selectedStatus};
+  if(selectedStatus==='finished') data.finishedAt=firebase.firestore.FieldValue.serverTimestamp();
+  else if(id) data.finishedAt=firebase.firestore.FieldValue.delete();
   try{
     if(id){
       const old=matches.find(m=>m.id===id); if(old&&matchHasStarted(old)&&old.status==='voting_open'&&old.scheduledStart){
@@ -404,5 +435,7 @@ $$('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
 $('#dashboardMatchCard')?.addEventListener('click',()=>{ if(currentMatch) show('match'); });
 $('#dashboardMatchCard')?.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&currentMatch){e.preventDefault();show('match');} });
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
-async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7.9: dashboard Player cliccabile + calendario caricati.');}
+let voteTimer=null;
+function startVoteTimer(){ if(voteTimer) clearInterval(voteTimer); voteTimer=setInterval(()=>{ if(currentMatch){ renderDashboard(); renderMatch(); } },1000); }
+async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Faires Beta.11: finestra voto 24h e timer attivi.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};

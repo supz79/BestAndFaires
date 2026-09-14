@@ -42,8 +42,15 @@ service cloud.firestore {
         allow get, list: if admin();
         allow create: if player()
           && request.auth.uid == voterUid
-          && get(/databases/$(database)/documents/matches/$(matchId)).data.status == 'voting_open'
+          && get(/databases/$(database)/documents/matches/$(matchId)).data.status in ['scheduled','in_progress','voting_open']
           && get(/databases/$(database)/documents/matches/$(matchId)).data.scheduledStart <= request.time
+          && (
+            (('finishedAt' in get(/databases/$(database)/documents/matches/$(matchId)).data)
+              && request.time <= get(/databases/$(database)/documents/matches/$(matchId)).data.finishedAt + duration.value(24, 'h'))
+            ||
+            (!('finishedAt' in get(/databases/$(database)/documents/matches/$(matchId)).data)
+              && request.time <= get(/databases/$(database)/documents/matches/$(matchId)).data.scheduledStart + duration.value(24, 'h'))
+          )
           && me().playerId in get(/databases/$(database)/documents/matches/$(matchId)).data.lineup
           && request.resource.data.keys().hasOnly(['ranking'])
           && request.resource.data.ranking is list
