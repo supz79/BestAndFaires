@@ -111,7 +111,22 @@ async function loadMatches(){
     });
     currentMatch=activeNow[0] || future[0] || null;
   }else{
-    currentMatch = matches.find(m=>m.status==='voting_open') || matches.find(m=>parseDateTime(m)?.getTime()>Date.now()) || matches[0] || null;
+    // Anche l'Admin deve vedere prima una partita attualmente in corso,
+    // non saltarla semplicemente perché nel calendario esiste una partita futura.
+    // Priorità: votazione aperta -> in corso -> altra partita già iniziata -> futura.
+    const activeNow = matches.filter(m=>{
+      const d=parseDateTime(m);
+      return !!d && Date.now()>=d.getTime() && !['finished','cancelled','postponed'].includes(String(m.status||''));
+    });
+    activeNow.sort((a,b)=>{
+      const rank=s=>s==='voting_open'?0:(s==='in_progress'?1:2);
+      return rank(a.status)-rank(b.status) || (parseDateTime(b)?.getTime()||0)-(parseDateTime(a)?.getTime()||0);
+    });
+    const future=matches.filter(m=>{
+      const d=parseDateTime(m);
+      return !!d && d.getTime()>Date.now() && !['finished','cancelled','postponed'].includes(String(m.status||''));
+    });
+    currentMatch=activeNow[0] || future[0] || matches[0] || null;
   }
   lineup = currentMatch && Array.isArray(currentMatch.lineup) ? [...currentMatch.lineup] : [];
 }
@@ -245,8 +260,28 @@ $('#submitVote')?.addEventListener('click',async()=>{
   if(ranking.some(x=>!x)||new Set(ranking).size!==3) return alert('Seleziona tre giocatori diversi.');
   if(ranking.some(x=>!lineup.includes(x))) return alert('Puoi votare solo giocatori presenti in distinta.');
   if(ranking.includes(me?.id)) return alert('Non puoi votare te stesso.');
-  try{ await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).create({ranking}); localVoted=true; renderMatch(); alert('✅ Voto registrato. Grazie!'); }
-  catch(e){console.error(e); alert(e.code==='permission-denied'?'❌ Voto rifiutato dalle regole di sicurezza.':'❌ Impossibile registrare il voto.');}
+  try{
+    await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).create({ranking});
+    localVoted=true;
+    renderMatch();
+    alert('✅ Voto registrato. Grazie!');
+  }
+  catch(e){
+    console.error('Errore registrazione voto:', e, {
+      uid: uid(),
+      playerId: window.currentUserData?.playerId,
+      matchId: currentMatch?.id,
+      matchStatus: currentMatch?.status,
+      scheduledStart: currentMatch?.scheduledStart?.toDate ? currentMatch.scheduledStart.toDate().toISOString() : currentMatch?.scheduledStart,
+      lineup: currentMatch?.lineup
+    });
+    if(e.code==='permission-denied'){
+      alert('❌ Firebase ha rifiutato il voto. Controlla che il profilo Player abbia il campo playerId corretto e che quel giocatore sia nella distinta.');
+    }else{
+      alert(`❌ Impossibile registrare il voto.
+${e.code||''} ${e.message||''}`.trim());
+    }
+  }
 });
 
 async function calculateRanking(){
