@@ -48,3 +48,15 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 /* Beta 7.17.1 - visibilita' pulsante registrazione */
 .login-card .ghost { color:#111827; border-color:#374151; background:#fff; }
 .login-card .ghost:hover { background:#f3f4f6; }
+
+
+/* Beta 7.17.2 - Logo multisport */
+.topbar{background:#fff;color:#111827;border-bottom:1px solid #e5e7eb;min-height:82px;}
+.brand{display:flex;align-items:center;}
+.brand-logo{display:block;width:min(290px,52vw);height:auto;max-height:64px;object-fit:contain;object-position:left center;}
+.topbar .ghost{color:#111827;border-color:#d1d5db;background:#fff;}
+.topbar .ghost:hover{background:#f3f4f6;}
+.login-card{padding:26px 24px 24px;}
+.login-logo{display:block;width:min(430px,92%);height:auto;margin:0 auto 18px;object-fit:contain;}
+.login-card .section-head{margin-top:4px;}
+@media(max-width:650px){.topbar{min-height:70px}.brand-logo{width:min(245px,62vw);max-height:52px}.login-logo{width:96%;margin-bottom:14px;}}
