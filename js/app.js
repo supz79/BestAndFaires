@@ -116,7 +116,10 @@ async function loadMatches(){
     // Priorità: votazione aperta -> in corso -> altra partita già iniziata -> futura.
     const activeNow = matches.filter(m=>{
       const d=parseDateTime(m);
-      return !!d && Date.now()>=d.getTime() && !['finished','cancelled','postponed'].includes(String(m.status||''));
+      const status=String(m.status||'');
+      const explicitlyInProgress=status==='in_progress' || status==='voting_open';
+      const startedByTime=!!d && Date.now()>=d.getTime();
+      return (explicitlyInProgress || startedByTime) && !['finished','cancelled','postponed'].includes(status);
     });
     activeNow.sort((a,b)=>{
       const rank=s=>s==='voting_open'?0:(s==='in_progress'?1:2);
@@ -261,7 +264,7 @@ $('#submitVote')?.addEventListener('click',async()=>{
   if(ranking.some(x=>!lineup.includes(x))) return alert('Puoi votare solo giocatori presenti in distinta.');
   if(ranking.includes(me?.id)) return alert('Non puoi votare te stesso.');
   try{
-    await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).create({ranking});
+    await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).set({ranking});
     localVoted=true;
     renderMatch();
     alert('✅ Voto registrato. Grazie!');
