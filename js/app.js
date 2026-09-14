@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.10 - Ranking giornata + generale */
+/* Best&Faires Beta.7.15 - Classifiche Player + risultati pubblici + hover partita */
 
 let players = [];
 let matches = [];
@@ -157,6 +157,12 @@ function renderDashboard(){
   else if(started) { label='IN CORSO'; cls='pill'; }
   else { label='PROSSIMA'; cls='pill'; }
   if(state){state.textContent=label;state.className=cls;}
+  const dashboardCard=$('#dashboardMatchCard');
+  if(dashboardCard){
+    const clickable=!!currentMatch;
+    dashboardCard.classList.toggle('is-clickable',clickable);
+    dashboardCard.setAttribute('aria-disabled',clickable?'false':'true');
+  }
   if(progress){
     const n=Array.isArray(currentMatch.lineup)?currentMatch.lineup.length:0;
     if(isPlayer() && votingWindowOpen(currentMatch)) progress.textContent=`Voto disponibile ancora per ${formatCountdown(votingRemainingMs(currentMatch))}`;
@@ -171,6 +177,7 @@ async function refresh(){
   try{
     await loadLeague(); await loadPlayers(); await loadMatches();
     renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar();
+    await syncPublicResultsForAdmin();
     await renderRanking(); await loadOwnVoteState(); renderMatch();
   }catch(e){ console.error(e); const msg=$('#voteMsg'); if(msg) msg.textContent='❌ Errore nel caricamento dei dati da Firebase.'; }
 }
@@ -264,7 +271,30 @@ $('#submitVote')?.addEventListener('click',async()=>{
   if(ranking.some(x=>!lineup.includes(x))) return alert('Puoi votare solo giocatori presenti in distinta.');
   if(ranking.includes(me?.id)) return alert('Non puoi votare te stesso.');
   try{
-    await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).set({ranking});
+    const matchRef=db.collection('matches').doc(currentMatch.id);
+    const voteRef=matchRef.collection('votes').doc(uid());
+    const resultRefs=ranking.map(id=>matchRef.collection('publicResults').doc(id));
+
+    // Un'unica transazione: crea il voto segreto e aggiorna i tre risultati
+    // pubblici. Le Security Rules verificano che gli incrementi corrispondano
+    // esattamente al voto appena creato.
+    await db.runTransaction(async tx=>{
+      const snaps=await Promise.all(resultRefs.map(ref=>tx.get(ref)));
+      snaps.forEach((snap,i)=>{
+        const playerId=ranking[i];
+        const old=snap.exists?snap.data():{points:0,first:0,second:0,third:0,votes:0};
+        const inc={points:3-i,first:i===0?1:0,second:i===1?1:0,third:i===2?1:0,votes:1};
+        tx.set(resultRefs[i],{
+          points:(old.points||0)+inc.points,
+          first:(old.first||0)+inc.first,
+          second:(old.second||0)+inc.second,
+          third:(old.third||0)+inc.third,
+          votes:(old.votes||0)+inc.votes
+        });
+      });
+      tx.set(voteRef,{ranking});
+    });
+
     localVoted=true;
     renderMatch();
     alert('✅ Voto registrato. Grazie!');
@@ -287,38 +317,75 @@ ${e.code||''} ${e.message||''}`.trim());
   }
 });
 
+async function syncPublicResultsForAdmin(){
+  if(!isAdmin()) return;
+  try{
+    for(const m of matches){
+      const votesSnap=await db.collection('matches').doc(m.id).collection('votes').get();
+      const totals={};
+      votesSnap.forEach(doc=>{
+        (doc.data().ranking||[]).forEach((id,i)=>{
+          if(!totals[id]) totals[id]={points:0,first:0,second:0,third:0,votes:0};
+          totals[id].points+=3-i;
+          totals[id].votes++;
+          totals[id][['first','second','third'][i]]++;
+        });
+      });
+      const resultSnap=await db.collection('matches').doc(m.id).collection('publicResults').get();
+      const batch=db.batch();
+      let writes=0;
+      Object.entries(totals).forEach(([id,t])=>{
+        batch.set(db.collection('matches').doc(m.id).collection('publicResults').doc(id),t);
+        writes++;
+      });
+      resultSnap.docs.forEach(d=>{
+        if(!totals[d.id]){ batch.delete(d.ref); writes++; }
+      });
+      if(writes) await batch.commit();
+    }
+  }catch(e){ console.error('Sincronizzazione risultati pubblici:',e); }
+}
+
 async function calculateRanking(){
   const map=Object.fromEntries(players.map(p=>[p.id,{...p,points:0,votes:0,first:0,second:0,third:0}]));
   if(!currentMatch) return [];
   const activeTab=document.querySelector('.tab.active')?.dataset.tab || 'day';
 
-  // La classifica della giornata riguarda esclusivamente i giocatori
-  // presenti nella distinta della partita selezionata.
+  // Le classifiche sono pubbliche per Player e Admin. I Player leggono
+  // esclusivamente gli aggregati pubblici, mai i documenti /votes/{uid}.
   if(activeTab==='day'){
-    if(!isAdmin()) return Object.values(map).filter(p=>lineup.includes(p.id));
-    const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').get();
-    snap.forEach(doc=>{(doc.data().ranking||[]).forEach((id,i)=>{if(!map[id])return;map[id].points+=3-i;map[id].votes++;map[id][['first','second','third'][i]]++;});});
-    return Object.values(map).filter(p=>lineup.includes(p.id)).sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
+    const snap=await db.collection('matches').doc(currentMatch.id).collection('publicResults').get();
+    snap.forEach(doc=>{
+      if(!map[doc.id]) return;
+      const d=doc.data()||{};
+      map[doc.id].points=Number(d.points||0);
+      map[doc.id].votes=Number(d.votes||0);
+      map[doc.id].first=Number(d.first||0);
+      map[doc.id].second=Number(d.second||0);
+      map[doc.id].third=Number(d.third||0);
+    });
+    return Object.values(map)
+      .filter(p=>lineup.includes(p.id))
+      .sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
   }
 
-  // La classifica generale deve comprendere TUTTI i giocatori della rosa,
-  // anche chi non e' mai stato inserito in una distinta. Chi non ha punti
-  // resta quindi visibile con 0 pt. I voti individuali sono leggibili solo
-  // dall'Admin, come imposto dalle Security Rules.
-  if(!isAdmin()) return Object.values(map).sort((a,b)=>b.points-a.points||playerName(a).localeCompare(playerName(b),'it'));
-
+  // Classifica generale: tutti i giocatori della rosa devono comparire,
+  // compresi quelli che non sono mai entrati in distinta. I risultati
+  // pubblici di ogni partita vengono sommati senza esporre i singoli voti.
   const results=await Promise.all(matches.map(async m=>{
-    const snap=await db.collection('matches').doc(m.id).collection('votes').get();
-    return snap.docs.map(d=>d.data().ranking||[]);
+    const snap=await db.collection('matches').doc(m.id).collection('publicResults').get();
+    return snap.docs.map(d=>({id:d.id,...(d.data()||{})}));
   }));
-  results.flat().forEach(ranking=>ranking.forEach((id,i)=>{
-    if(!map[id]) return;
-    map[id].points+=3-i;
-    map[id].votes++;
-    map[id][['first','second','third'][i]]++;
-  }));
-
-  return Object.values(map).sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
+  results.flat().forEach(d=>{
+    if(!map[d.id]) return;
+    map[d.id].points+=Number(d.points||0);
+    map[d.id].votes+=Number(d.votes||0);
+    map[d.id].first+=Number(d.first||0);
+    map[d.id].second+=Number(d.second||0);
+    map[d.id].third+=Number(d.third||0);
+  });
+  return Object.values(map)
+    .sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
 }
 async function renderRanking(){
   const rows=await calculateRanking();
@@ -491,5 +558,5 @@ $('#dashboardMatchCard')?.addEventListener('keydown',e=>{ if((e.key==='Enter'||e
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
 let voteTimer=null;
 function startVoteTimer(){ if(voteTimer) clearInterval(voteTimer); voteTimer=setInterval(()=>{ if(currentMatch){ renderDashboard(); renderMatch(); } },1000); }
-async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Faires Beta.11: finestra voto 24h e timer attivi.');}
+async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Faires Beta.15: classifiche Player + partite cliccabili.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
