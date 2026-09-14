@@ -297,4 +297,4 @@ function show(id){
 $$('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
 async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7.1: Firestore + calendario caricati.');}
-window.applyRolePermissions=async userData=>{window.currentUserData=userData;['[data-screen="admin"]','[data-screen="calendar"]'].forEach(sel=>{const b=document.querySelector(sel);if(b)b.style.display=userData?.role==='admin'?'':'none';});await bootApp();};
+window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
