@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.6 - Firestore + Calendario Admin */
+/* Best&Faires Beta.7.10 - Ranking giornata + generale */
 
 let players = [];
 let matches = [];
@@ -207,14 +207,42 @@ $('#submitVote')?.addEventListener('click',async()=>{
 async function calculateRanking(){
   const map=Object.fromEntries(players.map(p=>[p.id,{...p,points:0,votes:0,first:0,second:0,third:0}]));
   if(!currentMatch) return [];
-  if(!isAdmin()) return Object.values(map).filter(p=>lineup.includes(p.id));
-  const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').get();
-  snap.forEach(doc=>{(doc.data().ranking||[]).forEach((id,i)=>{if(!map[id])return;map[id].points+=3-i;map[id].votes++;map[id][['first','second','third'][i]]++;});});
-  return Object.values(map).filter(p=>lineup.includes(p.id)).sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
+  const activeTab=document.querySelector('.tab.active')?.dataset.tab || 'day';
+
+  // La classifica della giornata riguarda esclusivamente i giocatori
+  // presenti nella distinta della partita selezionata.
+  if(activeTab==='day'){
+    if(!isAdmin()) return Object.values(map).filter(p=>lineup.includes(p.id));
+    const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').get();
+    snap.forEach(doc=>{(doc.data().ranking||[]).forEach((id,i)=>{if(!map[id])return;map[id].points+=3-i;map[id].votes++;map[id][['first','second','third'][i]]++;});});
+    return Object.values(map).filter(p=>lineup.includes(p.id)).sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
+  }
+
+  // La classifica generale deve comprendere TUTTI i giocatori della rosa,
+  // anche chi non e' mai stato inserito in una distinta. Chi non ha punti
+  // resta quindi visibile con 0 pt. I voti individuali sono leggibili solo
+  // dall'Admin, come imposto dalle Security Rules.
+  if(!isAdmin()) return Object.values(map).sort((a,b)=>b.points-a.points||playerName(a).localeCompare(playerName(b),'it'));
+
+  const results=await Promise.all(matches.map(async m=>{
+    const snap=await db.collection('matches').doc(m.id).collection('votes').get();
+    return snap.docs.map(d=>d.data().ranking||[]);
+  }));
+  results.flat().forEach(ranking=>ranking.forEach((id,i)=>{
+    if(!map[id]) return;
+    map[id].points+=3-i;
+    map[id].votes++;
+    map[id][['first','second','third'][i]]++;
+  }));
+
+  return Object.values(map).sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
 }
 async function renderRanking(){
   const rows=await calculateRanking();
-  $('#rankingTable').innerHTML=rows.map((p,i)=>`<div class="rank"><span class="pos">${i<3?['🥇','🥈','🥉'][i]:i+1}</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${p.first}× 1° · ${p.second}× 2° · ${p.third}× 3°</span></div><span class="points">${p.points} pt</span></div>`).join('')||'<p class="muted">Nessun risultato.</p>';
+  const activeTab=document.querySelector('.tab.active')?.dataset.tab || 'day';
+  const title=activeTab==='season' ? 'Classifica generale' : `Classifica G${escapeHtml(currentMatch?.giornata||currentMatch?.day||'')}`;
+  const html=rows.map((p,i)=>`<div class="rank"><span class="pos">${i<3?['🥇','🥈','🥉'][i]:i+1}</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${p.first}× 1° · ${p.second}× 2° · ${p.third}× 3°</span></div><span class="points">${p.points} pt</span></div>`).join('');
+  $('#rankingTable').innerHTML=`<div class="sub" style="margin-bottom:14px">${title}</div>`+(html||'<p class="muted">Nessun risultato.</p>');
 }
 function renderPlayers(){
   $('#playersTable').innerHTML=players.map(p=>`<div class="rank"><span class="pos">⚽</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${lineup.includes(p.id)?'In distinta':'Fuori distinta'}</span></div></div>`).join('')||'<p class="muted">Nessun giocatore.</p>';
@@ -373,6 +401,8 @@ function show(id){
   if(id==='ranking')renderRanking(); if(id==='players')renderPlayers(); if(id==='match')renderMatch(); if(id==='calendar')renderCalendar(); if(id==='dashboard')renderDashboard();
 }
 $$('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
+$('#dashboardMatchCard')?.addEventListener('click',()=>{ if(currentMatch) show('match'); });
+$('#dashboardMatchCard')?.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&currentMatch){e.preventDefault();show('match');} });
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
-async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7.7: dashboard Player + calendario caricati.');}
+async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7.9: dashboard Player cliccabile + calendario caricati.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
