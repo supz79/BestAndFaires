@@ -284,6 +284,8 @@ $('#newMatchBtn')?.addEventListener('click',()=>openMatchEditor());
 $('#cancelMatchEdit')?.addEventListener('click',closeMatchEditor); $('#closeMatchModal')?.addEventListener('click',closeMatchEditor);
 $('#matchEditForm')?.addEventListener('submit',saveMatchEditor);
 $('#excelInput')?.addEventListener('change',e=>handleExcel(e.target.files[0]));
+// Beta.7.1: listener esplicito anche tramite delegazione, utile dopo cache/DOM refresh.
+document.addEventListener('change',e=>{ if(e.target?.id==='excelInput') handleExcel(e.target.files?.[0]); });
 $('#importCommit')?.addEventListener('click',commitImport);
 $('#importCancel')?.addEventListener('click',()=>{$('#importPreviewCard').classList.add('hidden');calendarDraft=[];$('#excelInput').value='';});
 
@@ -294,5 +296,5 @@ function show(id){
 }
 $$('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
-async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7: Firestore + calendario caricati.');}
+async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();console.log('Best&Faires Beta.7.1: Firestore + calendario caricati.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;['[data-screen="admin"]','[data-screen="calendar"]'].forEach(sel=>{const b=document.querySelector(sel);if(b)b.style.display=userData?.role==='admin'?'':'none';});await bootApp();};
