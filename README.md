@@ -1,23 +1,14 @@
-# Best&Faires Beta.7.13
+# Best&Faires Beta 7.17
 
-Modifiche:
-- L'Admin vede prioritariamente la partita attualmente in corso, come il Player.
-- Il dashboard Admin non salta più una partita in corso per mostrare la successiva futura.
-- Migliorata diagnosi degli errori di registrazione del voto: in caso di rifiuto Firebase viene indicato di verificare il `playerId` del profilo e la distinta.
-- Il timer e la selezione dei tre voti restano persistenti durante gli aggiornamenti della schermata.
+Gestione registrazioni Player e associazione Admin direttamente dall'app.
 
+## Nuovo flusso
+1. Un utente sceglie "Registrati come Player".
+2. Inserisce nome, cognome, email e password.
+3. L'account Firebase viene creato e la registrazione resta in attesa.
+4. L'Admin vede la registrazione in "Amministrazione > Registrazioni Player".
+5. L'Admin associa l'utenza a un giocatore della rosa.
+6. L'account viene attivato e collegato al playerId.
+7. L'Admin può aggiungere giocatori alla rosa direttamente dall'app.
 
-## Beta.7.16
-- Classifica giornata e classifica generale visibili anche ai Player.
-- I Player leggono solo aggregati pubblici, non i documenti dei voti segreti.
-- Ogni voto aggiorna in modo atomico il voto segreto e i risultati pubblici.
-- L'Admin può ricostruire gli aggregati pubblici dai voti esistenti.
-- La scheda della partita corrente evidenzia visivamente che è cliccabile (hover/focus/active).
-- Security Rules aggiornate per proteggere gli aggregati pubblici.
-
-
-## Beta 7.16
-- L'Admin può ricalcolare le classifiche pubbliche partendo dai soli documenti `votes` realmente presenti.
-- Prima della lettura della classifica, l'Admin viene automaticamente riallineato ai voti reali.
-- Eventuali `publicResults` rimasti da un voto cancellato vengono rimossi durante il ricalcolo.
-- I Player continuano a vedere solo gli aggregati e non i voti individuali.
+Le password non sono mai visibili all'Admin.

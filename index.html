@@ -24,7 +24,25 @@
         <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
         <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
         <button class="primary" type="submit">🔐 Accedi</button>
+        <button class="ghost" type="button" id="showRegisterBtn">📝 Registrati come Player</button>
         <p id="loginMsg" class="success"></p>
+      </form>
+    </div>
+  </section>
+
+  <section id="register" class="screen">
+    <div class="card login-card">
+      <div class="section-head"><div><span class="eyebrow">REGISTRAZIONE</span><h2>Crea il tuo account</h2></div></div>
+      <p class="muted">Inserisci i tuoi dati. L'Admin della lega riceverà la registrazione e assocerà il tuo account al giocatore corretto.</p>
+      <form id="registerForm">
+        <label>Nome<input id="registerNome" required autocomplete="given-name"></label>
+        <label>Cognome<input id="registerCognome" required autocomplete="family-name"></label>
+        <label>Email<input id="registerEmail" type="email" required autocomplete="email"></label>
+        <label>Password<input id="registerPassword" type="password" minlength="6" required autocomplete="new-password"></label>
+        <label>Conferma password<input id="registerPassword2" type="password" minlength="6" required autocomplete="new-password"></label>
+        <button class="primary" type="submit">📝 Invia registrazione</button>
+        <button class="ghost" type="button" id="cancelRegisterBtn">Torna all'accesso</button>
+        <p id="registerMsg" class="success"></p>
       </form>
     </div>
   </section>
@@ -132,6 +150,21 @@
       <button id="recalculateResultsBtn" class="primary">🔄 Ricalcola classifiche</button>
     </div>
     <div class="card">
+      <h3>Registrazioni Player</h3>
+      <p class="muted">Qui trovi gli account registrati che devono ancora essere associati a un giocatore della rosa. Le password non sono mai visibili all'Admin.</p>
+      <div id="pendingRegistrations"></div>
+    </div>
+    <div class="card">
+      <h3>Gestione rosa</h3>
+      <p class="muted">Crea e gestisci i giocatori della squadra direttamente da Best&Faires.</p>
+      <form id="addPlayerForm" class="form-grid">
+        <label>Nome<input id="addPlayerNome" required></label>
+        <label>Cognome<input id="addPlayerCognome" required></label>
+        <div class="modal-actions" style="grid-column:1/-1"><button class="primary" type="submit">＋ Aggiungi giocatore</button></div>
+      </form>
+      <div id="adminPlayersList"></div>
+    </div>
+    <div class="card">
       <h3>Stato partita</h3>
       <p class="muted">Autenticazione, giocatori, partite e voti sono gestiti tramite Firebase Firestore. La sicurezza effettiva è demandata alle Security Rules.</p>
     </div>
@@ -144,6 +177,6 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/firebase.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/app.js?v=7.16"></script>
+<script src="js/app.js?v=7.17"></script>
 </body>
 </html>

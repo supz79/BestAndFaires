@@ -26,8 +26,8 @@ service cloud.firestore {
     match /users/{id} {
       allow get: if signedIn() && (request.auth.uid == id || admin());
       allow list: if admin();
-      allow create: if signedIn() && request.auth.uid == id && request.resource.data.role == 'player';
-      allow update: if admin() || (signedIn() && request.auth.uid == id && request.resource.data.role == resource.data.role && request.resource.data.leagueId == resource.data.leagueId && request.resource.data.playerId == resource.data.playerId);
+      allow create: if signedIn() && request.auth.uid == id && request.resource.data.role == 'player' && request.resource.data.active == false && request.resource.data.playerId == null && request.resource.data.registrationStatus == 'pending';
+      allow update: if admin() || (signedIn() && request.auth.uid == id && request.resource.data.role == resource.data.role && request.resource.data.leagueId == resource.data.leagueId && request.resource.data.playerId == resource.data.playerId && request.resource.data.active == resource.data.active && request.resource.data.registrationStatus == resource.data.registrationStatus);
       allow delete: if admin();
     }
 

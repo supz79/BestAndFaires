@@ -176,7 +176,7 @@ async function loadLeague(){
 async function refresh(){
   try{
     await loadLeague(); await loadPlayers(); await loadMatches();
-    renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar();
+    renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar(); renderAdminPlayers(); await loadPendingRegistrations();
     await syncPublicResultsForAdmin();
     await renderRanking(); await loadOwnVoteState(); renderMatch();
   }catch(e){ console.error(e); const msg=$('#voteMsg'); if(msg) msg.textContent='❌ Errore nel caricamento dei dati da Firebase.'; }
@@ -423,6 +423,56 @@ function updateProgress(){
   if(!isAdmin()){ $('#voteProgress').style.width='0%'; $('#voteCount').textContent=`${total} giocatori in distinta`; return; }
   db.collection('matches').doc(currentMatch.id).collection('votes').get().then(s=>{const voted=s.size;$('#voteProgress').style.width=(total?Math.min(100,voted/total*100):0)+'%';$('#voteCount').textContent=`${voted} / ${total} giocatori hanno votato`;}).catch(console.error);
 }
+
+// ---------- Registrazioni e rosa Admin ----------
+async function loadPendingRegistrations(){
+  const box=$('#pendingRegistrations'); if(!box||!isAdmin()) return;
+  try{
+    const snap=await db.collection('users').where('leagueId','==',leagueId()).get();
+    const pending=snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.role==='player' && u.active===false && u.registrationStatus==='pending');
+    if(!pending.length){box.innerHTML='<p class="muted">Nessuna registrazione in attesa.</p>';return;}
+    box.innerHTML=pending.map(u=>`<div class="rank pending-user"><span class="pos">👤</span><div><b>${escapeHtml([u.nome,u.cognome].filter(Boolean).join(' ')||'Nome non indicato')}</b><span class="sub">${escapeHtml(u.email||'Email non disponibile')}</span></div><button class="primary small-action" data-associate-user="${escapeHtml(u.id)}">Associa</button></div>`).join('');
+    box.querySelectorAll('[data-associate-user]').forEach(btn=>btn.addEventListener('click',()=>associateRegistration(btn.dataset.associateUser)));
+  }catch(e){console.error('Registrazioni in attesa:',e);box.innerHTML='<p class="muted">Impossibile caricare le registrazioni.</p>';}
+}
+async function associateRegistration(userId){
+  if(!isAdmin()) return;
+  const userSnap=await db.collection('users').doc(userId).get();
+  if(!userSnap.exists){alert('Registrazione non trovata.');return;}
+  const u=userSnap.data()||{};
+  const available=players.filter(p=>!p.userId && !p.associatedUid);
+  if(!available.length){alert('Nessun giocatore libero nella rosa. Aggiungi prima il giocatore.');return;}
+  const labels=available.map((p,i)=>`${i+1}. ${playerName(p)}`).join('\n');
+  const answer=prompt(`Associa ${[u.nome,u.cognome].filter(Boolean).join(' ')} (${u.email||'email non disponibile'}) a quale giocatore?\n\n${labels}\n\nInserisci il numero:`);
+  if(answer===null)return;
+  const idx=Number(answer)-1;
+  if(!Number.isInteger(idx)||idx<0||idx>=available.length){alert('Scelta non valida.');return;}
+  const p=available[idx];
+  if(!confirm(`Confermi l'associazione di ${u.email||'questa utenza'} a ${playerName(p)}?`)) return;
+  try{
+    const batch=db.batch();
+    batch.update(db.collection('users').doc(userId),{playerId:p.id,active:true,registrationStatus:'approved',associatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    batch.update(db.collection('players').doc(p.id),{userId:userId});
+    await batch.commit();
+    await refresh();
+    alert(`✅ Utenza associata a ${playerName(p)}.`);
+  }catch(e){console.error('Associazione:',e);alert('❌ Impossibile completare l’associazione.');}
+}
+async function addPlayerFromAdmin(e){
+  e.preventDefault(); if(!isAdmin())return;
+  const nome=$('#addPlayerNome').value.trim(), cognome=$('#addPlayerCognome').value.trim();
+  if(!nome||!cognome)return;
+  try{
+    await db.collection('players').add({nome,cognome,displayName:`${nome} ${cognome}`.trim(),leagueId:leagueId(),active:true,userId:null,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    $('#addPlayerForm').reset(); await refresh(); alert(`✅ ${nome} ${cognome} aggiunto alla rosa.`);
+  }catch(e){console.error('Aggiunta giocatore:',e);alert('❌ Impossibile aggiungere il giocatore.');}
+}
+function renderAdminPlayers(){
+  const box=$('#adminPlayersList'); if(!box||!isAdmin())return;
+  box.innerHTML=players.map(p=>`<div class="rank"><span class="pos">⚽</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${p.userId?'🟢 Account associato':'🟠 Nessun account associato'}</span></div></div>`).join('')||'<p class="muted">Nessun giocatore.</p>';
+}
+
+document.querySelector('#addPlayerForm')?.addEventListener('submit',addPlayerFromAdmin);
 
 // ---------- Calendario Admin ----------
 function renderCalendar(){

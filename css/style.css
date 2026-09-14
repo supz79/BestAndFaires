@@ -42,3 +42,6 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
   font-size: .7em;
   opacity: .55;
 }
+.pending-user { gap: 12px; }
+.small-action { padding: 9px 12px; font-size: .88rem; margin-left: auto; }
+#pendingRegistrations, #adminPlayersList { margin-top: 12px; }
