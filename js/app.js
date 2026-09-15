@@ -56,7 +56,7 @@ function matchEndDate(m=currentMatch){
   if(m.finishedAt) { const d=new Date(m.finishedAt); if(!Number.isNaN(d.getTime())) return d; }
   return parseDateTime(m);
 }
-function votingDeadlineDate(m=currentMatch){ const end=matchEndDate(m); return end ? new Date(end.getTime()+24*60*60*1000) : null; }
+function votingDeadlineDate(m=currentMatch){ const end=matchEndDate(m); return end ? new Date(end.getTime()+6*60*60*1000) : null; }
 function votingWindowOpen(m=currentMatch){
   if(!m || !matchHasStarted(m)) return false;
   const blocked=['cancelled','postponed']; if(blocked.includes(String(m.status||''))) return false;
@@ -101,11 +101,13 @@ async function loadMatches(){
     const activeNow=matches.filter(m=>{
       const d=parseDateTime(m);
       const eligible=!!meId && Array.isArray(m.lineup) && m.lineup.includes(meId);
-      const blocked=['finished','cancelled','postponed'].includes(String(m.status||''));
-      return !!d && Date.now()>=d.getTime() && eligible && !blocked;
+      const blocked=['cancelled','postponed'].includes(String(m.status||''));
+      // La votazione è indipendente dal risultato/stato amministrativo: anche
+      // una partita TERMINATA resta selezionabile finché la finestra di voto è aperta.
+      return !!d && Date.now()>=d.getTime() && eligible && !blocked && votingWindowOpen(m);
     });
     activeNow.sort((a,b)=>{
-      const rank=s=>s==='voting_open'?0:(s==='in_progress'?1:2);
+      const rank=s=>s==='voting_open'?0:(s==='in_progress'?1:(s==='finished'?0:2));
       return rank(a.status)-rank(b.status) || (parseDateTime(b)?.getTime()||0)-(parseDateTime(a)?.getTime()||0);
     });
     const future=matches.filter(m=>{
@@ -150,7 +152,7 @@ function renderDashboard(){
   const home=currentMatch.homeTeam||leagueTeam(), away=currentMatch.awayTeam||currentMatch.opponent||'Avversario';
   title.textContent=`${home} vs ${away}`;
   const started=matchHasStarted(currentMatch);
-  if(eyebrow) eyebrow.textContent=started ? 'PARTITA IN CORSO' : 'PROSSIMA PARTITA';
+  if(eyebrow) eyebrow.textContent=started ? (String(currentMatch.status||'')==='finished' ? 'VOTAZIONE POST-PARTITA' : 'PARTITA IN CORSO') : 'PROSSIMA PARTITA';
   const meInLineup=isPlayer() && currentPlayerInLineup();
   let label='PROGRAMMATA';
   let cls='pill';
@@ -694,21 +696,25 @@ async function saveMatchEditor(e){
   const id=$('#matchEditId').value, date=$('#matchEditDate').value, time=$('#matchEditTime').value, home=$('#matchEditHome').value.trim(), away=$('#matchEditAway').value.trim();
   if(!date||!time||!home||!away)return alert('Compila casa, trasferta, data e ora.');
   const scheduledStart=buildScheduledStart(date,time), selectedStatus=$('#matchEditStatus').value, data={giornata:String($('#matchEditRound').value).trim(),day:String($('#matchEditRound').value).trim(),fase:$('#matchEditPhase').value,homeTeam:home,awayTeam:away,opponent:leagueTeam()===home?away:home,isHome:isLocalTeamName(home),scheduledStart:firebase.firestore.Timestamp.fromDate(scheduledStart),date:formatDate(scheduledStart),time:time,status:selectedStatus};
-  if(selectedStatus==='finished') data.finishedAt=firebase.firestore.FieldValue.serverTimestamp();
-  else if(id) data.finishedAt=firebase.firestore.FieldValue.delete();
+  if(selectedStatus==='finished') {
+    const old=matches.find(m=>m.id===id);
+    // Il timestamp di fine viene creato una sola volta, così un successivo
+    // salvataggio del risultato non prolunga accidentalmente le 6 ore di voto.
+    if(!old || !old.finishedAt) data.finishedAt=firebase.firestore.FieldValue.serverTimestamp();
+  } else if(id) data.finishedAt=firebase.firestore.FieldValue.delete();
   try{
     if(id){
-      const old=matches.find(m=>m.id===id); if(old&&matchHasStarted(old)&&old.status==='voting_open'&&old.scheduledStart){
-        const confirmed=confirm('La partita è già iniziata. La modifica di data/ora richiede una conferma eccezionale. Continuare?'); if(!confirmed)return;
-        data.adminOverrideOpen=true;
-      }
+      const old=matches.find(m=>m.id===id);
+      // Dopo l'inizio resta modificabile lo stato e il riepilogo, mentre data/ora
+      // e distinta restano protette. Lo sblocco eccezionale continua a consentire
+      // modifiche alla distinta quando l'Admin lo attiva dall'app.
       await db.collection('matches').doc(id).update(data);
     }else{
       data.leagueId=leagueId(); data.lineup=[]; data.lineupLocked=false; data.adminOverrideOpen=false; data.calendarKey=calendarKey({fase:data.fase,giornata:data.giornata,casa:home,trasferta:away});
       await db.collection('matches').add(data);
     }
     closeMatchEditor(); setCalendarMessage('✅ Partita salvata.',true); await loadMatches(); renderCalendar(); renderMatch();
-  }catch(err){console.error(err);alert(err.code==='permission-denied'?'❌ Firebase ha rifiutato la modifica. La partita potrebbe essere già iniziata.':'❌ Impossibile salvare la partita.');}
+  }catch(err){console.error(err);alert(err.code==='permission-denied'?'❌ Firebase ha rifiutato la modifica. Dopo l’inizio restano bloccate data/ora e distinta, mentre stato e tabellino sono modificabili dall’Admin.':'❌ Impossibile salvare la partita.');}
 }
 
 function excelSerialToDate(value){
