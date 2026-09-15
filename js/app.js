@@ -28,6 +28,7 @@ function isLocalTeamName(name='') {
   const a = normalizeName(name), b = normalizeName(leagueTeam());
   if (!a || !b) return false;
   if (a === b || a.includes(b) || b.includes(a)) return true;
+  // Il calendario può usare una denominazione sportiva abbreviata rispetto alla lega.
   const aliases = ['juvenilia','polisportiva juvenilia'];
   return aliases.some(x => a.includes(x)) && b.includes('juvenilia');
 }
@@ -90,12 +91,19 @@ async function loadMatches(){
   const snap = await db.collection('matches').where('leagueId','==',leagueId()).get();
   matches = snap.docs.map(d=>({id:d.id,...d.data()}));
   matches.sort((a,b)=>(parseDateTime(a)?.getTime()||0)-(parseDateTime(b)?.getTime()||0));
+
+  // Per il Player la priorita e' la partita attualmente in corso
+  // alla quale il giocatore appartiene. Solo se non esiste, mostriamo
+  // la prossima partita futura. Questo evita di saltare una partita in
+  // corso solo perche' esiste un'altra partita piu' avanti nel calendario.
   if(isPlayer()){
     const meId=window.currentUserData?.playerId;
     const activeNow=matches.filter(m=>{
       const d=parseDateTime(m);
       const eligible=!!meId && Array.isArray(m.lineup) && m.lineup.includes(meId);
       const blocked=['cancelled','postponed'].includes(String(m.status||''));
+      // La votazione è indipendente dal risultato/stato amministrativo: anche
+      // una partita TERMINATA resta selezionabile finché la finestra di voto è aperta.
       return !!d && Date.now()>=d.getTime() && eligible && !blocked && votingWindowOpen(m);
     });
     activeNow.sort((a,b)=>{
@@ -108,6 +116,9 @@ async function loadMatches(){
     });
     currentMatch=activeNow[0] || future[0] || null;
   }else{
+    // Anche l'Admin deve vedere prima una partita attualmente in corso,
+    // non saltarla semplicemente perché nel calendario esiste una partita futura.
+    // Priorità: votazione aperta -> in corso -> altra partita già iniziata -> futura.
     const activeNow = matches.filter(m=>{
       const d=parseDateTime(m);
       const status=String(m.status||'');
@@ -143,7 +154,8 @@ function renderDashboard(){
   const started=matchHasStarted(currentMatch);
   if(eyebrow) eyebrow.textContent=started ? (String(currentMatch.status||'')==='finished' ? 'VOTAZIONE POST-PARTITA' : 'PARTITA IN CORSO') : 'PROSSIMA PARTITA';
   const meInLineup=isPlayer() && currentPlayerInLineup();
-  let label='PROGRAMMATA'; let cls='pill';
+  let label='PROGRAMMATA';
+  let cls='pill';
   if(started && meInLineup && votingWindowOpen(currentMatch)) { label='VOTA ORA'; cls='pill open'; }
   else if(started && meInLineup && !votingWindowOpen(currentMatch)) { label='VOTO SCADUTO'; cls='pill closed'; }
   else if(started && meInLineup) { label='IN CORSO'; cls='pill'; }
@@ -151,8 +163,16 @@ function renderDashboard(){
   else { label='PROSSIMA'; cls='pill'; }
   if(state){state.textContent=label;state.className=cls;}
   const dashboardCard=$('#dashboardMatchCard');
-  if(dashboardCard){ dashboardCard.classList.toggle('is-clickable',!!currentMatch); dashboardCard.setAttribute('aria-disabled',currentMatch?'false':'true'); }
-  if(progress){ const n=Array.isArray(currentMatch.lineup)?currentMatch.lineup.length:0; progress.textContent=(isPlayer()&&votingWindowOpen(currentMatch))?`Voto disponibile ancora per ${formatCountdown(votingRemainingMs(currentMatch))}`:(started?`${n} giocatori in distinta`:`Distinta disponibile prima dell'inizio della partita`); }
+  if(dashboardCard){
+    const clickable=!!currentMatch;
+    dashboardCard.classList.toggle('is-clickable',clickable);
+    dashboardCard.setAttribute('aria-disabled',clickable?'false':'true');
+  }
+  if(progress){
+    const n=Array.isArray(currentMatch.lineup)?currentMatch.lineup.length:0;
+    if(isPlayer() && votingWindowOpen(currentMatch)) progress.textContent=`Voto disponibile ancora per ${formatCountdown(votingRemainingMs(currentMatch))}`;
+    else progress.textContent=started ? `${n} giocatori in distinta` : `Distinta disponibile prima dell'inizio della partita`;
+  }
 }
 async function loadLeague(){
   const snap=await db.collection('leagues').doc(leagueId()).get();
@@ -187,8 +207,686 @@ function matchScoreText(m, summary){
 }
 async function loadPublicMatchResults(matchId){
   const totals={};
-  try{ const snap=await db.collection('matches').doc(matchId).collection('publicResults').get(); snap.forEach(d=>{totals[d.id]={id:d.id,...(d.data()||{})};}); }catch(e){ console.error('Risultati pubblici partita:',e); }
+  try{
+    const snap=await db.collection('matches').doc(matchId).collection('publicResults').get();
+    snap.forEach(d=>{totals[d.id]={id:d.id,...(d.data()||{})};});
+  }catch(e){ console.error('Risultati pubblici partita:',e); }
   return totals;
 }
+async function renderPlayedMatches(){
+  const box=$('#playedMatchesList'); if(!box) return;
+  const finished=matches.filter(m=>String(m.status||'')==='finished').sort((a,b)=>(parseDateTime(b)?.getTime()||0)-(parseDateTime(a)?.getTime()||0));
+  if(!finished.length){ box.innerHTML='<div class="card"><p class="muted">Nessuna partita disputata ancora.</p></div>'; return; }
+  box.innerHTML="<div class='card'><p class='muted'>Qui trovi il riepilogo delle partite terminate. I voti individuali restano segreti; sono visibili solo i risultati aggregati e l'MVP.</p></div>"+finished.map(m=>`<div class="card played-match-card" data-played-match="${escapeHtml(m.id)}"><div class="played-match-head"><div><span class="eyebrow">${escapeHtml(m.fase||'')} · G${escapeHtml(m.giornata||m.day||'')}</span><h3>${escapeHtml(m.homeTeam||leagueTeam())} <span class="score-placeholder">vs</span> ${escapeHtml(m.awayTeam||m.opponent||'Avversario')}</h3><small>${formatDateTime(parseDateTime(m))}</small></div><span class="pill closed">TERMINATA</span></div><div class="played-match-body"><span>Caricamento riepilogo...</span></div></div>`).join('');
+  for(const m of finished){
+    const card=box.querySelector(`[data-played-match="${CSS.escape(m.id)}"]`); if(!card) continue;
+    const body=card.querySelector('.played-match-body');
+    const [sumSnap,statsSnap,results]=await Promise.all([
+      db.collection('matches').doc(m.id).collection('summary').doc('main').get().catch(()=>null),
+      db.collection('matches').doc(m.id).collection('stats').get().catch(()=>null),
+      loadPublicMatchResults(m.id)
+    ]);
+    const summary=sumSnap?.exists?(sumSnap.data()||{}):{};
+    const statMap={}; statsSnap?.forEach(d=>statMap[d.id]=d.data()||{});
+    const played=Object.keys(statMap).filter(id=>statMap[id].appearance===1||statMap[id].appearance===true);
+    const ranked=Object.entries(results).sort((a,b)=>(b[1].points||0)-(a[1].points||0)||(b[1].first||0)-(a[1].first||0)||(b[1].second||0)-(a[1].second||0)||(b[1].third||0)-(a[1].third||0));
+    const top=ranked.filter(([,r])=>(r.points||0)>0);
+    const mvp=top.length?players.find(p=>p.id===top[0][0]):null;
+    const tie=top.length>1 && (top[1][1].points||0)===(top[0][1].points||0) && (top[1][1].first||0)===(top[0][1].first||0) && (top[1][1].second||0)===(top[0][1].second||0) && (top[1][1].third||0)===(top[0][1].third||0);
+    const mvpText=mvp?(tie?`⭐ MVP ex aequo: <b>${escapeHtml(playerName(mvp))}</b> e <b>${escapeHtml(playerName(players.find(p=>p.id===top[1][0])||{}))}</b>`:`⭐ MVP: <b>${escapeHtml(playerName(mvp))}</b> <span class="sub">${top[0][1].points||0} pt</span>`):'⭐ MVP: non disponibile';
+    const rows=played.map(id=>{const p=players.find(x=>x.id===id); if(!p)return ''; const st=statMap[id]||{}; const r=results[id]||{}; return `<div class="played-player-row"><b>${escapeHtml(playerName(p))}</b><span>⚽ ${statNum(st.goals)}</span><span>🎯 ${statNum(st.assists)}</span><span>🟨 ${statNum(st.yellow)}</span><span>🟥 ${statNum(st.red)}</span><span>⭐ ${statNum(r.points)} pt</span></div>`;}).join('');
+    const scorers=[];
+    played.forEach(id=>{ const p=players.find(x=>x.id===id); const st=statMap[id]||{}; if(!p) return; for(let i=0;i<statNum(st.goals);i++) scorers.push(playerName(p)); });
+    const scorersText=scorers.length ? `<div class="scorers-line"><b>⚽ Marcatori:</b> ${scorers.map(n=>escapeHtml(n)).join(', ')}</div>` : '';
+    body.innerHTML=`<div class="played-score">${matchScoreText(m,summary)}</div>${scorersText}<div class="mvp-box">${mvpText}</div><div class="played-stats"><div class="played-player-row played-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span><span>Voto</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}</div>`;
+  }
+}
 
-// ... existing code omitted intentionally ...
+async function loadMatchStats(matchId=currentMatch?.id){
+  currentMatchStats={};
+  if(!matchId) return;
+  try{
+    const snap=await db.collection('matches').doc(matchId).collection('stats').get();
+    snap.forEach(d=>{ currentMatchStats[d.id]={id:d.id,...(d.data()||{})}; });
+  }catch(e){ console.error('Caricamento statistiche partita:',e); }
+}
+function statNum(v){ const n=Number(v); return Number.isFinite(n)&&n>=0?Math.floor(n):0; }
+function renderMatchStats(){
+  const card=$('#matchStatsCard'), box=$('#matchStatsList');
+  if(!card||!box||!currentMatch) return;
+  const canEdit=isAdmin();
+  const saveBtn=$('#saveMatchStatsBtn'), msg=$('#matchStatsMsg'), resultBox=$('#matchResultEditor');
+  // Preserve unsaved values because renderMatch() is refreshed every second
+  // by the vote timer. Rebuilding the form must not reset inputs while the
+  // Admin is typing the opponent score or player statistics.
+  const preservedOpponentScore = canEdit ? document.querySelector('#opponentScore')?.value : undefined;
+  const preservedStats = {};
+  if(canEdit){
+    document.querySelectorAll('#matchStatsList .stats-row[data-stat-player]').forEach(row=>{
+      const id=row.dataset.statPlayer;
+      preservedStats[id]={
+        appearance: !!row.querySelector('.stat-appearance')?.checked,
+        goals: row.querySelector('.stat-goals')?.value ?? '',
+        assists: row.querySelector('.stat-assists')?.value ?? '',
+        yellow: row.querySelector('.stat-yellow')?.value ?? '',
+        red: row.querySelector('.stat-red')?.value ?? ''
+      };
+    });
+  }
+  if(saveBtn) saveBtn.closest('.modal-actions')?.classList.toggle('hidden',!canEdit);
+  if(msg) msg.classList.toggle('hidden',!canEdit);
+  if(resultBox){
+    const home=currentMatch.homeTeam||leagueTeam(), away=currentMatch.awayTeam||currentMatch.opponent||'Avversario';
+    if(canEdit){
+      const localIsHome=isLocalTeamName(home);
+      const localTeam=localIsHome?home:away;
+      const opponentTeam=localIsHome?away:home;
+      const savedLocalGoals=Object.values(currentMatchStats||{}).reduce((sum,st)=>sum+statNum(st.goals),0);
+      const localGoals=Object.values(preservedStats).reduce((sum,st)=>sum+statNum(st.goals),0) || (Object.keys(preservedStats).length ? 0 : savedLocalGoals);
+      const opponentScoreSaved=localIsHome?statNum(currentMatchSummary.awayScore):statNum(currentMatchSummary.homeScore);
+      const opponentScore=preservedOpponentScore !== undefined ? preservedOpponentScore : opponentScoreSaved;
+      resultBox.innerHTML=`<div class="result-editor-title">🏟️ Risultato partita</div><div class="result-inputs"><div class="result-auto-score"><span class="result-team">${escapeHtml(localTeam)}</span><strong id="localScoreDisplay">${localGoals}</strong><small>gol nel tabellino</small></div><span>−</span><label>${escapeHtml(opponentTeam)}<input id="opponentScore" type="number" min="0" step="1" value="${escapeHtml(String(opponentScore))}"></label></div>`;
+    }else resultBox.innerHTML='';
+  }
+  const ids=Array.isArray(currentMatch.lineup)?currentMatch.lineup:[];
+  if(!ids.length){ card.classList.toggle('hidden',!canEdit); box.innerHTML='<p class="muted">Nessun giocatore in distinta.</p>'; return; }
+  const rows=ids.map(id=>{
+    const p=players.find(x=>x.id===id); if(!p) return '';
+    const st=currentMatchStats[id]||{};
+    const draft=preservedStats[id];
+    const played=draft ? draft.appearance : (st.appearance===1 || st.appearance===true);
+    if(canEdit){
+      const goals=draft ? draft.goals : String(statNum(st.goals));
+      const assists=draft ? draft.assists : String(statNum(st.assists));
+      const yellow=draft ? draft.yellow : String(statNum(st.yellow));
+      const red=draft ? draft.red : String(statNum(st.red));
+      return `<div class="stats-row" data-stat-player="${escapeHtml(id)}">
+        <div><b>${escapeHtml(playerName(p))}</b><div class="stats-note">${played?'Presenza registrata':'Non ancora registrato come presente'}</div></div>
+        <label title="Presenza">🏟️ <input class="stat-appearance" type="checkbox" ${played?'checked':''}></label>
+        <label title="Gol">⚽ <input class="stat-goals" type="number" min="0" step="1" value="${escapeHtml(goals)}"></label>
+        <label title="Assist">🎯 <input class="stat-assists" type="number" min="0" step="1" value="${escapeHtml(assists)}"></label>
+        <label title="Gialli">🟨 <input class="stat-yellow" type="number" min="0" step="1" value="${escapeHtml(yellow)}"></label>
+        <label title="Rossi">🟥 <input class="stat-red" type="number" min="0" step="1" value="${escapeHtml(red)}"></label>
+      </div>`;
+    }
+    if(!played) return '';
+    return `<div class="stats-row stats-readonly" data-stat-player="${escapeHtml(id)}"><div><b>${escapeHtml(playerName(p))}</b></div><span>⚽ ${statNum(st.goals)}</span><span>🎯 ${statNum(st.assists)}</span><span>🟨 ${statNum(st.yellow)}</span><span>🟥 ${statNum(st.red)}</span></div>`;
+  }).join('');
+  card.classList.toggle('hidden',!canEdit && !Object.keys(currentMatchStats).length);
+  if(canEdit){
+    box.innerHTML=`<div class="stats-grid stats-header"><span>Giocatore</span><span>Pres.</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span></div>${rows||'<p class="muted">Nessun giocatore.</p>'}`;
+  }else{
+    box.innerHTML=`<div class="stats-row stats-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}`;
+  }
+}
+async function saveMatchStats(){
+  if(!isAdmin()||!currentMatch) return;
+  const btn=$('#saveMatchStatsBtn'), rows=[...document.querySelectorAll('#matchStatsList .stats-row[data-stat-player]')];
+  if(btn){btn.disabled=true;btn.textContent='⏳ Salvataggio...';}
+  try{
+    const batch=db.batch();
+    const summaryRef=db.collection('matches').doc(currentMatch.id).collection('summary').doc('main');
+    let localScore=0;
+    rows.forEach(row=>{
+      const playerId=row.dataset.statPlayer;
+      const appearance=row.querySelector('.stat-appearance')?.checked;
+      const goals=statNum(row.querySelector('.stat-goals')?.value);
+      if(appearance) localScore += goals;
+      const ref=db.collection('matches').doc(currentMatch.id).collection('stats').doc(playerId);
+      if(!appearance){ batch.delete(ref); return; }
+      const data={appearance:1,goals,assists:statNum(row.querySelector('.stat-assists')?.value),yellow:statNum(row.querySelector('.stat-yellow')?.value),red:statNum(row.querySelector('.stat-red')?.value)};
+      batch.set(ref,data,{merge:true});
+    });
+    const opponentScore=statNum($('#opponentScore')?.value);
+    const localIsHome=isLocalTeamName(currentMatch.homeTeam||leagueTeam());
+    const homeScore=localIsHome?localScore:opponentScore;
+    const awayScore=localIsHome?opponentScore:localScore;
+    batch.set(summaryRef,{homeScore,awayScore,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+    await batch.commit();
+    await loadMatchStats(currentMatch.id); await loadMatchSummary(currentMatch.id); renderMatchStats(); await renderPlayedMatches();
+    const msg=$('#matchStatsMsg'); if(msg) msg.textContent='✅ Tabellino salvato.';
+  }catch(e){
+    console.error('Salvataggio statistiche:',e);
+    alert(e.code==='permission-denied'?'❌ Firebase ha rifiutato il salvataggio del tabellino.':'❌ Impossibile salvare il tabellino.');
+  }finally{ if(btn){btn.disabled=false;btn.textContent='💾 Salva tabellino';} }
+}
+async function loadSeasonStats(){
+  const totals=Object.fromEntries(players.map(p=>[p.id,{...p,appearances:0,goals:0,assists:0,yellow:0,red:0}]));
+  try{
+    await Promise.all(matches.map(async m=>{
+      const snap=await db.collection('matches').doc(m.id).collection('stats').get();
+      snap.forEach(d=>{
+        if(!totals[d.id]) return;
+        const x=d.data()||{};
+        if(x.appearance===1 || x.appearance===true) totals[d.id].appearances+=1;
+        totals[d.id].goals+=statNum(x.goals); totals[d.id].assists+=statNum(x.assists); totals[d.id].yellow+=statNum(x.yellow); totals[d.id].red+=statNum(x.red);
+      });
+    }));
+  }catch(e){console.error('Statistiche stagione:',e);}
+  return Object.values(totals).sort((a,b)=>b.goals-a.goals||b.assists-a.assists||b.appearances-a.appearances||playerName(a).localeCompare(playerName(b),'it'));
+}
+async function renderSeasonStats(){
+  const box=$('#seasonStatsTable'); if(!box) return;
+  const rows=await loadSeasonStats();
+  box.innerHTML=`<div class="card"><span class="eyebrow">STAGIONE</span><h3>Statistiche giocatori</h3><p class="muted">Riepilogo cumulativo delle partite disputate. I dati di ogni singola partita restano conservati nel relativo tabellino.</p><div class="stats-season"><div class="stats-header"><span>Giocatore</span><span>Pres.</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span></div>${rows.map(p=>`<div class="stats-row"><div><b>${escapeHtml(playerName(p))}</b></div><span>${p.appearances}</span><span>${p.goals}</span><span>${p.assists}</span><span>${p.yellow}</span><span>${p.red}</span></div>`).join('')}</div></div>`;
+}
+
+function renderMatch(){
+  if(!currentMatch){
+    $('#matchTitle').textContent='Nessuna partita caricata'; $('#rosterList').innerHTML='<p class="muted">L’Admin deve inserire una partita nel calendario.</p>'; $('#votingCard')?.classList.add('hidden'); $('#matchStatsCard')?.classList.add('hidden'); $('#saveMatchStatsBtn')?.closest('.modal-actions')?.classList.add('hidden'); $('#matchStatsMsg')?.classList.add('hidden'); return;
+  }
+  const statsMatchId=currentMatch.id;
+  if(renderMatch._loadedStatsFor!==statsMatchId){
+    renderMatch._loadedStatsFor=statsMatchId;
+    Promise.all([loadMatchStats(statsMatchId),loadMatchSummary(statsMatchId)]).then(()=>{ if(currentMatch?.id===statsMatchId){ renderMatchStats(); } });
+  }
+  renderMatchStats();
+  const home=currentMatch.homeTeam||leagueTeam(), away=currentMatch.awayTeam||currentMatch.opponent||'Avversario';
+  const title=`${home} vs ${away}`;
+  $('#matchTitle').textContent=title; const mh=$('#match h2'); if(mh) mh.textContent=title;
+  const d=parseDateTime(currentMatch); const meta=$('#match .match-meta'); if(meta) meta.innerHTML=`<span>Giornata ${escapeHtml(currentMatch.day||currentMatch.giornata||'')}</span><span>${formatDateTime(d)}</span>`;
+  const dt=$('#match h3'); if(dt) dt.textContent=`Distinta ${escapeHtml(leagueTeam())}`;
+  const box=$('#rosterList'), locked=isLineupLocked(), me=currentPlayer();
+  box.innerHTML=players.map(p=>{
+    const checked=lineup.includes(p.id), mine=me?.id===p.id;
+    return `<label class="check ${locked||!isAdmin()?'locked':''}"><input type="checkbox" data-player="${escapeHtml(p.id)}" ${checked?'checked':''} ${(locked||!isAdmin())?'disabled':''}><span>${escapeHtml(playerName(p))}</span>${mine?'<small class="sub">Tu</small>':''}</label>`;
+  }).join('');
+  const lockBtn=$('#lockBtn');
+  if(isAdmin()){
+    lockBtn.style.display='';
+    if(matchHasStarted()) lockBtn.textContent=currentMatch.adminOverrideOpen?'🔒 Chiudi modifica eccezionale':'🔓 Sblocca distinta (eccezione Admin)';
+    else lockBtn.textContent=currentMatch.lineupLocked?'🔓 Sblocca distinta':'🔒 Blocca distinta';
+  }else lockBtn.style.display='none';
+  const status=$('#matchLockStatus');
+  if(status){
+    if(matchHasStarted()){
+      const deadline=votingDeadlineDate(currentMatch);
+      status.textContent=(currentMatch.adminOverrideOpen?'⚠️ Sblocco eccezionale Admin attivo. ':'🔒 Distinta bloccata automaticamente all’inizio della partita. ')+(deadline?`⏱️ Votazione disponibile fino al ${formatDateTime(deadline)}.`:'');
+    } else status.textContent='🕒 Distinta modificabile fino all’inizio della partita.';
+  }
+  const canVote=isPlayer()&&votingWindowOpen(currentMatch)&&currentPlayerInLineup();
+  if(canVote){ $('#votingCard').classList.remove('hidden'); populateVotes(); } else $('#votingCard').classList.add('hidden');
+  const timer=$('#voteTimer');
+  if(timer){
+    if(isPlayer() && votingWindowOpen(currentMatch)) { timer.textContent=`⏱️ Tempo per votare: ${formatCountdown(votingRemainingMs(currentMatch))}`; timer.className='pill open'; }
+    else if(isPlayer() && matchHasStarted()) { timer.textContent='⏱️ Finestra di voto scaduta'; timer.className='pill closed'; }
+    else timer.textContent='⏱️ Il voto sarà disponibile dopo l’inizio della partita';
+  }
+  updateProgress();
+}
+
+$('#rosterList')?.addEventListener('change',async e=>{
+  if(!isAdmin()||!e.target.matches('input')||isLineupLocked()) return;
+  const id=e.target.dataset.player;
+  if(e.target.checked&&!lineup.includes(id)) lineup.push(id);
+  if(!e.target.checked) lineup=lineup.filter(x=>x!==id);
+  try{ await db.collection('matches').doc(currentMatch.id).update({lineup}); currentMatch.lineup=[...lineup]; renderMatch(); }
+  catch(err){ console.error(err); alert('Impossibile aggiornare la distinta.'); }
+});
+$('#lockBtn')?.addEventListener('click',async()=>{
+  if(!isAdmin()||!currentMatch) return;
+  const next=matchHasStarted()?!currentMatch.adminOverrideOpen:!currentMatch.lineupLocked;
+  const data=matchHasStarted()?{adminOverrideOpen:next}:{lineupLocked:next};
+  try{ await db.collection('matches').doc(currentMatch.id).update(data); Object.assign(currentMatch,data); renderMatch(); }
+  catch(e){ console.error(e); alert('Firebase ha rifiutato la modifica della distinta.'); }
+});
+async function loadOwnVoteState(){
+  localVoted=false; if(!isPlayer()||!currentMatch) return;
+  try{ const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).get(); localVoted=snap.exists; }catch(e){console.error(e);}
+}
+function populateVotes(){
+  const me=currentPlayer(), eligible=players.filter(p=>lineup.includes(p.id)&&p.id!==me?.id);
+
+  // Il timer aggiorna la schermata ogni secondo. Prima di ricostruire i
+  // menu salviamo quindi le selezioni correnti, altrimenti il loro valore
+  // verrebbe azzerato ad ogni aggiornamento.
+  const selected={};
+  [1,2,3].forEach(n=>{
+    const current=$('#vote'+n);
+    if(current) selected[n]=current.value;
+  });
+
+  [1,2,3].forEach(n=>{
+    const s=$('#vote'+n);
+    if(!s) return;
+    s.innerHTML='<option value="">Seleziona...</option>'+eligible.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(playerName(p))}</option>`).join('');
+    if(selected[n] && eligible.some(p=>p.id===selected[n])) s.value=selected[n];
+    s.disabled=localVoted;
+  });
+  $('#submitVote').disabled=localVoted; $('#voteMsg').textContent=localVoted?'✅ Voto già registrato per questo account.':'';
+}
+$('#submitVote')?.addEventListener('click',async()=>{
+  if(!isPlayer()||!currentMatch||!votingWindowOpen(currentMatch)||!currentPlayerInLineup()||localVoted) return;
+  const ranking=[1,2,3].map(n=>$('#vote'+n).value), me=currentPlayer();
+  if(ranking.some(x=>!x)||new Set(ranking).size!==3) return alert('Seleziona tre giocatori diversi.');
+  if(ranking.some(x=>!lineup.includes(x))) return alert('Puoi votare solo giocatori presenti in distinta.');
+  if(ranking.includes(me?.id)) return alert('Non puoi votare te stesso.');
+  try{
+    const matchRef=db.collection('matches').doc(currentMatch.id);
+    const voteRef=matchRef.collection('votes').doc(uid());
+    const resultRefs=ranking.map(id=>matchRef.collection('publicResults').doc(id));
+
+    // Un'unica transazione: crea il voto segreto e aggiorna i tre risultati
+    // pubblici. Le Security Rules verificano che gli incrementi corrispondano
+    // esattamente al voto appena creato.
+    await db.runTransaction(async tx=>{
+      const snaps=await Promise.all(resultRefs.map(ref=>tx.get(ref)));
+      snaps.forEach((snap,i)=>{
+        const playerId=ranking[i];
+        const old=snap.exists?snap.data():{points:0,first:0,second:0,third:0,votes:0};
+        const inc={points:3-i,first:i===0?1:0,second:i===1?1:0,third:i===2?1:0,votes:1};
+        tx.set(resultRefs[i],{
+          points:(old.points||0)+inc.points,
+          first:(old.first||0)+inc.first,
+          second:(old.second||0)+inc.second,
+          third:(old.third||0)+inc.third,
+          votes:(old.votes||0)+inc.votes
+        });
+      });
+      tx.set(voteRef,{ranking});
+    });
+
+    localVoted=true;
+    renderMatch();
+    alert('✅ Voto registrato. Grazie!');
+  }
+  catch(e){
+    console.error('Errore registrazione voto:', e, {
+      uid: uid(),
+      playerId: window.currentUserData?.playerId,
+      matchId: currentMatch?.id,
+      matchStatus: currentMatch?.status,
+      scheduledStart: currentMatch?.scheduledStart?.toDate ? currentMatch.scheduledStart.toDate().toISOString() : currentMatch?.scheduledStart,
+      lineup: currentMatch?.lineup
+    });
+    if(e.code==='permission-denied'){
+      alert('❌ Firebase ha rifiutato il voto. Controlla che il profilo Player abbia il campo playerId corretto e che quel giocatore sia nella distinta.');
+    }else{
+      alert(`❌ Impossibile registrare il voto.
+${e.code||''} ${e.message||''}`.trim());
+    }
+  }
+});
+
+async function syncPublicResultsForAdmin(){
+  if(!isAdmin()) return;
+  try{
+    for(const m of matches){
+      const votesSnap=await db.collection('matches').doc(m.id).collection('votes').get();
+      const totals={};
+      votesSnap.forEach(doc=>{
+        (doc.data().ranking||[]).forEach((id,i)=>{
+          if(!totals[id]) totals[id]={points:0,first:0,second:0,third:0,votes:0};
+          totals[id].points+=3-i;
+          totals[id].votes++;
+          totals[id][['first','second','third'][i]]++;
+        });
+      });
+      const resultSnap=await db.collection('matches').doc(m.id).collection('publicResults').get();
+      const batch=db.batch();
+      let writes=0;
+      Object.entries(totals).forEach(([id,t])=>{
+        batch.set(db.collection('matches').doc(m.id).collection('publicResults').doc(id),t);
+        writes++;
+      });
+      resultSnap.docs.forEach(d=>{
+        if(!totals[d.id]){ batch.delete(d.ref); writes++; }
+      });
+      if(writes) await batch.commit();
+    }
+  }catch(e){ console.error('Sincronizzazione risultati pubblici:',e); }
+}
+
+async function calculateRanking(){
+  // Per l'Admin riallineiamo sempre gli aggregati pubblici ai voti reali
+  // prima di leggere la classifica. In questo modo eventuali cancellazioni
+  // manuali di documenti /votes non possono lasciare risultati fantasma.
+  if(isAdmin()) await syncPublicResultsForAdmin();
+  const map=Object.fromEntries(players.map(p=>[p.id,{...p,points:0,votes:0,first:0,second:0,third:0}]));
+  if(!currentMatch) return [];
+  const activeTab=document.querySelector('.tab.active')?.dataset.tab || 'day';
+
+  // Le classifiche sono pubbliche per Player e Admin. I Player leggono
+  // esclusivamente gli aggregati pubblici, mai i documenti /votes/{uid}.
+  if(activeTab==='day'){
+    const snap=await db.collection('matches').doc(currentMatch.id).collection('publicResults').get();
+    snap.forEach(doc=>{
+      if(!map[doc.id]) return;
+      const d=doc.data()||{};
+      map[doc.id].points=Number(d.points||0);
+      map[doc.id].votes=Number(d.votes||0);
+      map[doc.id].first=Number(d.first||0);
+      map[doc.id].second=Number(d.second||0);
+      map[doc.id].third=Number(d.third||0);
+    });
+    return Object.values(map)
+      .filter(p=>lineup.includes(p.id))
+      .sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
+  }
+
+  // Classifica generale: tutti i giocatori della rosa devono comparire,
+  // compresi quelli che non sono mai entrati in distinta. I risultati
+  // pubblici di ogni partita vengono sommati senza esporre i singoli voti.
+  const results=await Promise.all(matches.map(async m=>{
+    const snap=await db.collection('matches').doc(m.id).collection('publicResults').get();
+    return snap.docs.map(d=>({id:d.id,...(d.data()||{})}));
+  }));
+  results.flat().forEach(d=>{
+    if(!map[d.id]) return;
+    map[d.id].points+=Number(d.points||0);
+    map[d.id].votes+=Number(d.votes||0);
+    map[d.id].first+=Number(d.first||0);
+    map[d.id].second+=Number(d.second||0);
+    map[d.id].third+=Number(d.third||0);
+  });
+  return Object.values(map)
+    .sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
+}
+async function recalculatePublicResults(){
+  if(!isAdmin()) return;
+  const btn=$('#recalculateResultsBtn');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Ricalcolo in corso...'; }
+  try{
+    await syncPublicResultsForAdmin();
+    await renderRanking();
+    alert('✅ Classifiche riallineate ai voti presenti in Firebase.');
+  }catch(e){
+    console.error('Ricalcolo classifiche:',e);
+    alert('❌ Impossibile ricalcolare le classifiche.');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='🔄 Ricalcola classifiche'; }
+  }
+}
+$('#recalculateResultsBtn')?.addEventListener('click',recalculatePublicResults);
+
+async function renderRanking(){
+  const rows=await calculateRanking();
+  const activeTab=document.querySelector('.tab.active')?.dataset.tab || 'day';
+  const title=activeTab==='season' ? 'Classifica generale' : `Classifica G${escapeHtml(currentMatch?.giornata||currentMatch?.day||'')}`;
+  const html=rows.map((p,i)=>`<div class="rank"><span class="pos">${i<3?['🥇','🥈','🥉'][i]:i+1}</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${p.first}× 1° · ${p.second}× 2° · ${p.third}× 3°</span></div><span class="points">${p.points} pt</span></div>`).join('');
+  $('#rankingTable').innerHTML=`<div class="sub" style="margin-bottom:14px">${title}</div>`+(html||'<p class="muted">Nessun risultato.</p>');
+}
+function renderPlayers(){
+  $('#playersTable').innerHTML=players.map(p=>`<div class="rank"><span class="pos">⚽</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${lineup.includes(p.id)?'In distinta':'Fuori distinta'}</span></div></div>`).join('')||'<p class="muted">Nessun giocatore.</p>';
+  renderSeasonStats();
+}
+function updateProgress(){
+  if(!currentMatch)return; const total=lineup.length;
+  if(!isAdmin()){ $('#voteProgress').style.width='0%'; $('#voteCount').textContent=`${total} giocatori in distinta`; return; }
+  db.collection('matches').doc(currentMatch.id).collection('votes').get().then(s=>{const voted=s.size;$('#voteProgress').style.width=(total?Math.min(100,voted/total*100):0)+'%';$('#voteCount').textContent=`${voted} / ${total} giocatori hanno votato`;}).catch(console.error);
+}
+
+// ---------- Registrazioni e rosa Admin ----------
+async function loadPendingRegistrations(){
+  const box=$('#pendingRegistrations'); if(!box||!isAdmin()) return;
+  try{
+    const snap=await db.collection('users').where('leagueId','==',leagueId()).get();
+    const pending=snap.docs.map(d=>({id:d.id,...d.data()})).filter(u=>u.role==='player' && u.active===false && u.registrationStatus==='pending');
+    if(!pending.length){box.innerHTML='<p class="muted">Nessuna registrazione in attesa.</p>';return;}
+    box.innerHTML=pending.map(u=>`<div class="rank pending-user"><span class="pos">👤</span><div><b>${escapeHtml([u.nome,u.cognome].filter(Boolean).join(' ')||'Nome non indicato')}</b><span class="sub">${escapeHtml(u.email||'Email non disponibile')}</span></div><button class="primary small-action" data-associate-user="${escapeHtml(u.id)}">Associa</button></div>`).join('');
+    box.querySelectorAll('[data-associate-user]').forEach(btn=>btn.addEventListener('click',()=>associateRegistration(btn.dataset.associateUser)));
+  }catch(e){console.error('Registrazioni in attesa:',e);box.innerHTML='<p class="muted">Impossibile caricare le registrazioni.</p>';}
+}
+async function associateRegistration(userId){
+  if(!isAdmin()) return;
+  const userSnap=await db.collection('users').doc(userId).get();
+  if(!userSnap.exists){alert('Registrazione non trovata.');return;}
+  const u=userSnap.data()||{};
+  const available=players.filter(p=>!p.userId && !p.associatedUid);
+  if(!available.length){alert('Nessun giocatore libero nella rosa. Aggiungi prima il giocatore.');return;}
+  const labels=available.map((p,i)=>`${i+1}. ${playerName(p)}`).join('\n');
+  const answer=prompt(`Associa ${[u.nome,u.cognome].filter(Boolean).join(' ')} (${u.email||'email non disponibile'}) a quale giocatore?\n\n${labels}\n\nInserisci il numero:`);
+  if(answer===null)return;
+  const idx=Number(answer)-1;
+  if(!Number.isInteger(idx)||idx<0||idx>=available.length){alert('Scelta non valida.');return;}
+  const p=available[idx];
+  if(!confirm(`Confermi l'associazione di ${u.email||'questa utenza'} a ${playerName(p)}?`)) return;
+  try{
+    const batch=db.batch();
+    batch.update(db.collection('users').doc(userId),{playerId:p.id,active:true,registrationStatus:'approved',associatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    batch.update(db.collection('players').doc(p.id),{userId:userId});
+    await batch.commit();
+    await refresh();
+    alert(`✅ Utenza associata a ${playerName(p)}.`);
+  }catch(e){console.error('Associazione:',e);alert('❌ Impossibile completare l’associazione.');}
+}
+async function addPlayerFromAdmin(e){
+  e.preventDefault(); if(!isAdmin())return;
+  const nome=$('#addPlayerNome').value.trim(), cognome=$('#addPlayerCognome').value.trim();
+  if(!nome||!cognome)return;
+  try{
+    await db.collection('players').add({nome,cognome,displayName:`${nome} ${cognome}`.trim(),leagueId:leagueId(),active:true,userId:null,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    $('#addPlayerForm').reset(); await refresh(); alert(`✅ ${nome} ${cognome} aggiunto alla rosa.`);
+  }catch(e){console.error('Aggiunta giocatore:',e);alert('❌ Impossibile aggiungere il giocatore.');}
+}
+async function renderAdminPlayers(){
+  const box=$('#adminPlayersList'); if(!box||!isAdmin())return;
+  try{
+    const associated=players.filter(p=>p.userId);
+    const userEntries=await Promise.all(associated.map(async p=>{
+      try{
+        const snap=await db.collection('users').doc(p.userId).get();
+        return [p.userId, snap.exists ? snap.data() : {}];
+      }catch(e){
+        console.error('Lettura utente associato:',e);
+        return [p.userId, {}];
+      }
+    }));
+    const userMap=Object.fromEntries(userEntries);
+    box.innerHTML=players.map(p=>{
+      const u=p.userId ? (userMap[p.userId]||{}) : null;
+      const email=u?.email||'Email non disponibile';
+      const action=p.userId
+        ? `<button class="small-btn" data-change-email="${escapeHtml(p.userId)}">✉️ Modifica mail utente</button>`
+        : '';
+      return `<div class="rank"><span class="pos">⚽</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${p.userId?'🟢 Account associato · '+escapeHtml(email):'🟠 Nessun account associato'}</span></div>${action}</div>`;
+    }).join('')||'<p class="muted">Nessun giocatore.</p>';
+    box.querySelectorAll('[data-change-email]').forEach(btn=>btn.addEventListener('click',()=>changePlayerEmail(btn.dataset.changeEmail)));
+  }catch(e){
+    console.error('Render gestione rosa:',e);
+    box.innerHTML='<p class="muted">Impossibile caricare gli account associati.</p>';
+  }
+}
+
+async function changePlayerEmail(userId){
+  if(!isAdmin()||!userId)return;
+  const player=players.find(p=>p.userId===userId);
+  if(!player){alert('Giocatore non trovato.');return;}
+  let currentEmail='';
+  try{
+    const snap=await db.collection('users').doc(userId).get();
+    currentEmail=snap.exists?(snap.data().email||''):'';
+  }catch(e){console.error(e);}
+  const newEmail=prompt(`Modifica email utente di ${playerName(player)}.\n\nEmail attuale: ${currentEmail||'non disponibile'}\n\nInserisci la nuova email:`, currentEmail||'');
+  if(newEmail===null)return;
+  const normalized=newEmail.trim().toLowerCase();
+  if(!normalized){alert('Inserisci un indirizzo email.');return;}
+  if(normalized===String(currentEmail).trim().toLowerCase()){alert('La nuova email coincide con quella attuale.');return;}
+  if(!confirm(`Confermi la modifica dell'email di ${playerName(player)}?\n\nNuova email: ${normalized}\n\nIl Player dovrà verificare nuovamente il nuovo indirizzo.`))return;
+  try{
+    const fn=firebase.app().functions('europe-west8').httpsCallable('updatePlayerEmail');
+    const result=await fn({uid:userId,newEmail:normalized});
+    if(result?.data?.ok){
+      await refresh();
+      alert(`✅ Email aggiornata per ${playerName(player)}.\n\nNuovo indirizzo: ${normalized}\n\nIl Player dovrà accedere con la nuova email e completare nuovamente la verifica.`);
+    }else{
+      alert('❌ Modifica email non completata.');
+    }
+  }catch(e){
+    console.error('Modifica email utente:',e);
+    const msg=e?.message||'';
+    if(e?.code==='functions/already-exists') alert('❌ Questa email è già associata a un altro account Firebase.');
+    else if(e?.code==='functions/permission-denied') alert('❌ Operazione non autorizzata.');
+    else if(e?.code==='functions/not-found') alert('❌ Account Firebase non trovato.');
+    else alert(`❌ Impossibile modificare l'email.\n\n${msg||'Controlla che le Cloud Functions siano state pubblicate.'}`);
+  }
+}
+
+document.querySelector('#addPlayerForm')?.addEventListener('submit',addPlayerFromAdmin);
+
+// ---------- Calendario Admin ----------
+function renderCalendar(){
+  const box=$('#calendarList'); if(!box) return;
+  if(!isAdmin()){box.innerHTML='<p class="muted">Solo gli Admin possono gestire il calendario.</p>';return;}
+  const grouped={Andata:[],Ritorno:[]};
+  matches.forEach(m=>{const phase=String(m.fase||'').toLowerCase()==='ritorno'?'Ritorno':'Andata';grouped[phase].push(m);});
+  const section=(name,arr)=>`<div class="calendar-group"><h3>${name}</h3>${arr.sort((a,b)=>(Number(a.giornata||a.day)||0)-(Number(b.giornata||b.day)||0)).map(m=>{
+    const d=parseDateTime(m), title=`${m.homeTeam||leagueTeam()} vs ${m.awayTeam||m.opponent||''}`;
+    return `<div class="calendar-row"><div><b>G${escapeHtml(m.giornata||m.day||'')}</b><span>${escapeHtml(title)}</span><small>${formatDateTime(d)}</small></div><span class="pill ${statusClass(m.status)}">${statusLabel(m.status)}</span><div class="calendar-actions"><button class="small-btn stats-match" data-id="${escapeHtml(m.id)}">📊 Tabellino</button><button class="small-btn edit-match" data-id="${escapeHtml(m.id)}">✏️ Modifica</button></div></div>`;
+  }).join('')||'<p class="muted">Nessuna partita.</p>'}</div>`;
+  box.innerHTML=section('Andata',grouped.Andata)+section('Ritorno',grouped.Ritorno);
+}
+function setCalendarMessage(text,good=false){const el=$('#calendarMsg');if(el){el.textContent=text;el.className=good?'success':'muted';}}
+function openMatchEditor(match=null){
+  if(!isAdmin())return;
+  $('#matchEditId').value=match?.id||'';
+  $('#matchEditRound').value=match?.giornata||match?.day||'';
+  $('#matchEditPhase').value=String(match?.fase||'Andata').toLowerCase()==='ritorno'?'Ritorno':'Andata';
+  const d=parseDateTime(match); $('#matchEditDate').value=d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
+  $('#matchEditTime').value=d?`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`:'';
+  $('#matchEditHome').value=match?.homeTeam||leagueTeam(); $('#matchEditAway').value=match?.opponent||match?.awayTeam||'';
+  $('#matchEditStatus').value=match?.status||'scheduled'; $('#matchModal').classList.remove('hidden');
+}
+function closeMatchEditor(){ $('#matchModal').classList.add('hidden'); }
+function buildScheduledStart(date,time){ return new Date(`${date}T${time}:00`); }
+async function saveMatchEditor(e){
+  e.preventDefault(); if(!isAdmin())return;
+  const id=$('#matchEditId').value, date=$('#matchEditDate').value, time=$('#matchEditTime').value, home=$('#matchEditHome').value.trim(), away=$('#matchEditAway').value.trim();
+  if(!date||!time||!home||!away)return alert('Compila casa, trasferta, data e ora.');
+  const scheduledStart=buildScheduledStart(date,time), selectedStatus=$('#matchEditStatus').value, data={giornata:String($('#matchEditRound').value).trim(),day:String($('#matchEditRound').value).trim(),fase:$('#matchEditPhase').value,homeTeam:home,awayTeam:away,opponent:leagueTeam()===home?away:home,isHome:isLocalTeamName(home),scheduledStart:firebase.firestore.Timestamp.fromDate(scheduledStart),date:formatDate(scheduledStart),time:time,status:selectedStatus};
+  if(selectedStatus==='finished') {
+    const old=matches.find(m=>m.id===id);
+    // Il timestamp di fine viene creato una sola volta, così un successivo
+    // salvataggio del risultato non prolunga accidentalmente le 6 ore di voto.
+    if(!old || !old.finishedAt) data.finishedAt=firebase.firestore.FieldValue.serverTimestamp();
+  } else if(id) data.finishedAt=firebase.firestore.FieldValue.delete();
+  try{
+    if(id){
+      const old=matches.find(m=>m.id===id);
+      // Dopo l'inizio resta modificabile lo stato e il riepilogo, mentre data/ora
+      // e distinta restano protette. Lo sblocco eccezionale continua a consentire
+      // modifiche alla distinta quando l'Admin lo attiva dall'app.
+      await db.collection('matches').doc(id).update(data);
+    }else{
+      data.leagueId=leagueId(); data.lineup=[]; data.lineupLocked=false; data.adminOverrideOpen=false; data.calendarKey=calendarKey({fase:data.fase,giornata:data.giornata,casa:home,trasferta:away});
+      await db.collection('matches').add(data);
+    }
+    closeMatchEditor(); setCalendarMessage('✅ Partita salvata.',true); await loadMatches(); renderCalendar(); renderMatch();
+  }catch(err){console.error(err);alert(err.code==='permission-denied'?'❌ Firebase ha rifiutato la modifica. Dopo l’inizio restano bloccate data/ora e distinta, mentre stato e tabellino sono modificabili dall’Admin.':'❌ Impossibile salvare la partita.');}
+}
+
+function excelSerialToDate(value){
+  if (value instanceof Date) return value;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const epoch = new Date(Date.UTC(1899,11,30));
+    const d = new Date(epoch.getTime() + value * 86400000);
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+  }
+  if (typeof value === 'string') {
+    const text=value.trim();
+    const m=text.match(/^(\d{1,2})[\\/.](\d{1,2})[\\/.](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+    if(m) return new Date(Number(m[3]),Number(m[2])-1,Number(m[1]),Number(m[4]||0),Number(m[5]||0),0);
+  }
+  return null;
+}
+function parseExcelRows(workbook){
+  const rows=[]; let phase='Andata';
+  workbook.SheetNames.forEach(name=>{
+    const sheet=workbook.Sheets[name];
+    const data=XLSX.utils.sheet_to_json(sheet,{header:1,raw:true,defval:null});
+    data.forEach(r=>{
+      const first=String(r?.[0]??'').trim().toUpperCase();
+      if(first==='ANDATA'){phase='Andata';return;}
+      if(first==='RITORNO'){phase='Ritorno';return;}
+      if(first==='GIORNATA')return;
+      const giornata=String(r?.[0]??'').trim();
+      const casa=String(r?.[1]??'').trim();
+      const trasferta=String(r?.[2]??'').trim();
+      const d=excelSerialToDate(r?.[3]);
+      if(!/^\d+$/.test(giornata)||!casa||!trasferta||!d||Number.isNaN(d.getTime()))return;
+      rows.push({fase:phase,giornata,casa,trasferta,date:d});
+    });
+  });
+  return rows;
+}
+function localAndOpponent(row){
+  // Manteniamo l'ordine reale della partita del calendario.
+  // isHome indica invece se la squadra della lega è la squadra di casa.
+  if(isLocalTeamName(row.casa)) return {isHome:true,home:row.casa,away:row.trasferta,opponent:row.trasferta};
+  if(isLocalTeamName(row.trasferta)) return {isHome:false,home:row.casa,away:row.trasferta,opponent:row.casa};
+  return {isHome:null,home:row.casa,away:row.trasferta,opponent:row.trasferta};
+}
+function renderImportPreview(rows){
+  const box=$('#importPreview'); if(!box)return;
+  const existing=new Map(matches.map(m=>[m.calendarKey,m]));
+  calendarDraft=rows.map(r=>{
+    const k=calendarKey(r), found=existing.get(k); const loc=localAndOpponent(r);
+    let type=found?'MODIFICA':'NUOVA', warning='';
+    if(loc.isHome===null) warning=`La squadra della lega "${leagueTeam()}" non è riconosciuta in questa partita`;
+    return {...r,calendarKey:k,found,loc,type,warning};
+  });
+  box.innerHTML=calendarDraft.map(r=>`<div class="import-row"><div><b>${escapeHtml(r.fase)} G${escapeHtml(r.giornata)}</b><span>${escapeHtml(r.casa)} vs ${escapeHtml(r.trasferta)}</span><small>${formatDateTime(r.date)}</small></div><span class="import-badge ${r.type==='NUOVA'?'new':'change'}">${r.type}</span>${r.warning?`<span class="warning">⚠️ ${escapeHtml(r.warning)}</span>`:''}</div>`).join('')||'<p class="muted">Nessuna riga valida trovata.</p>';
+  $('#importCommit').disabled=!calendarDraft.length||calendarDraft.some(x=>x.warning);
+  $('#importPreviewCard').classList.remove('hidden');
+}
+async function handleExcel(file){
+  if(!file||!isAdmin())return;
+  setCalendarMessage(`📖 Lettura di ${file.name}...`);
+  try{
+    const buffer=await file.arrayBuffer();
+    const wb=XLSX.read(buffer,{type:'array',cellDates:true});
+    const rows=parseExcelRows(wb);
+    if(!rows.length) throw new Error('Nessuna riga partita riconosciuta. Attese colonne: GIORNATA, CASA, TRASFERTA, DATA.');
+    renderImportPreview(rows);
+    setCalendarMessage(`✅ ${rows.length} partite trovate. Controlla l'anteprima prima di confermare.`);
+  }catch(e){
+    console.error('Import Excel:',e);
+    setCalendarMessage(`❌ ${e.message||'File Excel non valido o struttura non riconosciuta.'}`);
+  }
+}
+async function commitImport(){
+  if(!isAdmin()||!calendarDraft.length)return;
+  const existingMap=new Map(matches.map(m=>[m.calendarKey,m]));
+  try{
+    let created=0,updated=0;
+    for(const r of calendarDraft){
+      const loc=r.loc; const d=r.date; const data={calendarKey:r.calendarKey,leagueId:leagueId(),giornata:String(r.giornata),day:String(r.giornata),fase:r.fase,homeTeam:loc.home,awayTeam:loc.away,opponent:loc.opponent,isHome:loc.isHome,scheduledStart:firebase.firestore.Timestamp.fromDate(d),date:formatDate(d),time:`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
+      const old=existingMap.get(r.calendarKey);
+      if(old){
+        const oldDate=parseDateTime(old); const changed=!oldDate||oldDate.getTime()!==d.getTime();
+        if(changed&&matchHasStarted(old)) throw new Error(`La partita G${r.giornata} ${r.fase} è già iniziata e non può essere rischedulata tramite import.`);
+        await db.collection('matches').doc(old.id).update(data); updated++;
+      }else{
+        await db.collection('matches').add({...data,lineup:[],lineupLocked:false,adminOverrideOpen:false,status:'scheduled'}); created++;
+      }
+    }
+    $('#importPreviewCard').classList.add('hidden'); $('#excelInput').value=''; await loadMatches(); renderCalendar(); renderMatch(); setCalendarMessage(`✅ Importazione completata: ${created} nuove, ${updated} aggiornate.`,true);
+  }catch(e){console.error(e);alert(e.message.startsWith('La partita')?`❌ ${e.message}`:'❌ Importazione non completata. Nessuna garanzia di rollback automatico.');}
+}
+
+$('#calendarList')?.addEventListener('click',e=>{
+  const statsBtn=e.target.closest('.stats-match');
+  if(statsBtn&&isAdmin()){ const m=matches.find(x=>x.id===statsBtn.dataset.id); if(m){ currentMatch=m; lineup=Array.isArray(m.lineup)?[...m.lineup]:[]; renderMatch(); show('match'); } return; }
+  const b=e.target.closest('.edit-match'); if(b){const m=matches.find(x=>x.id===b.dataset.id);openMatchEditor(m);}
+});
+$('#saveMatchStatsBtn')?.addEventListener('click',saveMatchStats);
+$('#newMatchBtn')?.addEventListener('click',()=>openMatchEditor());
+$('#cancelMatchEdit')?.addEventListener('click',closeMatchEditor); $('#closeMatchModal')?.addEventListener('click',closeMatchEditor);
+$('#matchEditForm')?.addEventListener('submit',saveMatchEditor);
+$('#excelInput')?.addEventListener('change',e=>handleExcel(e.target.files?.[0]));
+$('#importCommit')?.addEventListener('click',commitImport);
+$('#importCancel')?.addEventListener('click',()=>{$('#importPreviewCard').classList.add('hidden');calendarDraft=[];$('#excelInput').value='';});
+
+function show(id){
+  if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return;
+  $$('.screen').forEach(x=>x.classList.remove('active')); $('#'+id)?.classList.add('active');
+  if(id==='ranking')renderRanking(); if(id==='players')renderPlayers(); if(id==='match')renderMatch(); if(id==='calendar')renderCalendar(); if(id==='played')renderPlayedMatches(); if(id==='dashboard')renderDashboard();
+}
+$$('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
+$('#dashboardMatchCard')?.addEventListener('click',()=>{ if(currentMatch) show('match'); });
+$('#dashboardMatchCard')?.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&currentMatch){e.preventDefault();show('match');} });
+$$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
+let voteTimer=null;
+function startVoteTimer(){ if(voteTimer) clearInterval(voteTimer); voteTimer=setInterval(()=>{ if(currentMatch){ renderDashboard(); renderMatch(); } },1000); }
+async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Faires Beta.19: tabellini partita e statistiche stagione.');}
+window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
