@@ -239,7 +239,7 @@ async function saveMatchStats(){
       const appearance=row.querySelector('.stat-appearance')?.checked;
       const ref=db.collection('matches').doc(currentMatch.id).collection('stats').doc(playerId);
       if(!appearance){ batch.delete(ref); return; }
-      const data={appearance:1,goals:statNum(row.querySelector('.stat-goals')?.value),assists:statNum(row.querySelector('.stat-assists')?.value),yellow:statNum(row.querySelector('.stat-yellow')?.value),red:statNum(row.querySelector('.stat-red')?.value),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+      const data={appearance:1,goals:statNum(row.querySelector('.stat-goals')?.value),assists:statNum(row.querySelector('.stat-assists')?.value),yellow:statNum(row.querySelector('.stat-yellow')?.value),red:statNum(row.querySelector('.stat-red')?.value)};
       batch.set(ref,data,{merge:true});
     });
     await batch.commit();
