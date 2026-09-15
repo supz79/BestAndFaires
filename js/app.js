@@ -254,6 +254,23 @@ function renderMatchStats(){
   if(!card||!box||!currentMatch) return;
   const canEdit=isAdmin();
   const saveBtn=$('#saveMatchStatsBtn'), msg=$('#matchStatsMsg'), resultBox=$('#matchResultEditor');
+  // Preserve unsaved values because renderMatch() is refreshed every second
+  // by the vote timer. Rebuilding the form must not reset inputs while the
+  // Admin is typing the opponent score or player statistics.
+  const preservedOpponentScore = canEdit ? document.querySelector('#opponentScore')?.value : undefined;
+  const preservedStats = {};
+  if(canEdit){
+    document.querySelectorAll('#matchStatsList .stats-row[data-stat-player]').forEach(row=>{
+      const id=row.dataset.statPlayer;
+      preservedStats[id]={
+        appearance: !!row.querySelector('.stat-appearance')?.checked,
+        goals: row.querySelector('.stat-goals')?.value ?? '',
+        assists: row.querySelector('.stat-assists')?.value ?? '',
+        yellow: row.querySelector('.stat-yellow')?.value ?? '',
+        red: row.querySelector('.stat-red')?.value ?? ''
+      };
+    });
+  }
   if(saveBtn) saveBtn.closest('.modal-actions')?.classList.toggle('hidden',!canEdit);
   if(msg) msg.classList.toggle('hidden',!canEdit);
   if(resultBox){
@@ -262,9 +279,11 @@ function renderMatchStats(){
       const localIsHome=isLocalTeamName(home);
       const localTeam=localIsHome?home:away;
       const opponentTeam=localIsHome?away:home;
-      const localGoals=Object.values(currentMatchStats||{}).reduce((sum,st)=>sum+statNum(st.goals),0);
-      const opponentScore=localIsHome?statNum(currentMatchSummary.awayScore):statNum(currentMatchSummary.homeScore);
-      resultBox.innerHTML=`<div class="result-editor-title">🏟️ Risultato partita</div><div class="result-inputs"><div class="result-auto-score"><span class="result-team">${escapeHtml(localTeam)}</span><strong id="localScoreDisplay">${localGoals}</strong><small>gol nel tabellino</small></div><span>−</span><label>${escapeHtml(opponentTeam)}<input id="opponentScore" type="number" min="0" step="1" value="${opponentScore}"></label></div>`;
+      const savedLocalGoals=Object.values(currentMatchStats||{}).reduce((sum,st)=>sum+statNum(st.goals),0);
+      const localGoals=Object.values(preservedStats).reduce((sum,st)=>sum+statNum(st.goals),0) || (Object.keys(preservedStats).length ? 0 : savedLocalGoals);
+      const opponentScoreSaved=localIsHome?statNum(currentMatchSummary.awayScore):statNum(currentMatchSummary.homeScore);
+      const opponentScore=preservedOpponentScore !== undefined ? preservedOpponentScore : opponentScoreSaved;
+      resultBox.innerHTML=`<div class="result-editor-title">🏟️ Risultato partita</div><div class="result-inputs"><div class="result-auto-score"><span class="result-team">${escapeHtml(localTeam)}</span><strong id="localScoreDisplay">${localGoals}</strong><small>gol nel tabellino</small></div><span>−</span><label>${escapeHtml(opponentTeam)}<input id="opponentScore" type="number" min="0" step="1" value="${escapeHtml(String(opponentScore))}"></label></div>`;
     }else resultBox.innerHTML='';
   }
   const ids=Array.isArray(currentMatch.lineup)?currentMatch.lineup:[];
@@ -272,15 +291,20 @@ function renderMatchStats(){
   const rows=ids.map(id=>{
     const p=players.find(x=>x.id===id); if(!p) return '';
     const st=currentMatchStats[id]||{};
-    const played=st.appearance===1 || st.appearance===true;
+    const draft=preservedStats[id];
+    const played=draft ? draft.appearance : (st.appearance===1 || st.appearance===true);
     if(canEdit){
+      const goals=draft ? draft.goals : String(statNum(st.goals));
+      const assists=draft ? draft.assists : String(statNum(st.assists));
+      const yellow=draft ? draft.yellow : String(statNum(st.yellow));
+      const red=draft ? draft.red : String(statNum(st.red));
       return `<div class="stats-row" data-stat-player="${escapeHtml(id)}">
         <div><b>${escapeHtml(playerName(p))}</b><div class="stats-note">${played?'Presenza registrata':'Non ancora registrato come presente'}</div></div>
         <label title="Presenza">🏟️ <input class="stat-appearance" type="checkbox" ${played?'checked':''}></label>
-        <label title="Gol">⚽ <input class="stat-goals" type="number" min="0" step="1" value="${statNum(st.goals)}"></label>
-        <label title="Assist">🎯 <input class="stat-assists" type="number" min="0" step="1" value="${statNum(st.assists)}"></label>
-        <label title="Gialli">🟨 <input class="stat-yellow" type="number" min="0" step="1" value="${statNum(st.yellow)}"></label>
-        <label title="Rossi">🟥 <input class="stat-red" type="number" min="0" step="1" value="${statNum(st.red)}"></label>
+        <label title="Gol">⚽ <input class="stat-goals" type="number" min="0" step="1" value="${escapeHtml(goals)}"></label>
+        <label title="Assist">🎯 <input class="stat-assists" type="number" min="0" step="1" value="${escapeHtml(assists)}"></label>
+        <label title="Gialli">🟨 <input class="stat-yellow" type="number" min="0" step="1" value="${escapeHtml(yellow)}"></label>
+        <label title="Rossi">🟥 <input class="stat-red" type="number" min="0" step="1" value="${escapeHtml(red)}"></label>
       </div>`;
     }
     if(!played) return '';
