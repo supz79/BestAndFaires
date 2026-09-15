@@ -744,7 +744,7 @@ function openMatchEditor(match=null){
   $('#matchEditPhase').value=String(match?.fase||'Andata').toLowerCase()==='ritorno'?'Ritorno':'Andata';
   const d=parseDateTime(match); $('#matchEditDate').value=d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
   $('#matchEditTime').value=d?`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`:'';
-  $('#matchEditHome').value=match?.homeTeam||leagueTeam(); $('#matchEditAway').value=match?.opponent||match?.awayTeam||'';
+  $('#matchEditHome').value=match?.homeTeam||leagueTeam(); $('#matchEditAway').value=match?.awayTeam||'';
   $('#matchEditStatus').value=match?.status||'scheduled'; $('#matchModal').classList.remove('hidden');
 }
 function closeMatchEditor(){ $('#matchModal').classList.add('hidden'); }
@@ -753,7 +753,7 @@ async function saveMatchEditor(e){
   e.preventDefault(); if(!isAdmin())return;
   const id=$('#matchEditId').value, date=$('#matchEditDate').value, time=$('#matchEditTime').value, home=$('#matchEditHome').value.trim(), away=$('#matchEditAway').value.trim();
   if(!date||!time||!home||!away)return alert('Compila casa, trasferta, data e ora.');
-  const scheduledStart=buildScheduledStart(date,time), selectedStatus=$('#matchEditStatus').value, data={giornata:String($('#matchEditRound').value).trim(),day:String($('#matchEditRound').value).trim(),fase:$('#matchEditPhase').value,homeTeam:home,awayTeam:away,opponent:leagueTeam()===home?away:home,isHome:isLocalTeamName(home),scheduledStart:firebase.firestore.Timestamp.fromDate(scheduledStart),date:formatDate(scheduledStart),time:time,status:selectedStatus};
+  const scheduledStart=buildScheduledStart(date,time), selectedStatus=$('#matchEditStatus').value, data={giornata:String($('#matchEditRound').value).trim(),day:String($('#matchEditRound').value).trim(),fase:$('#matchEditPhase').value,homeTeam:home,awayTeam:away,opponent:isLocalTeamName(home)?away:(isLocalTeamName(away)?home:away),isHome:isLocalTeamName(home),scheduledStart:firebase.firestore.Timestamp.fromDate(scheduledStart),date:formatDate(scheduledStart),time:time,status:selectedStatus};
   if(selectedStatus==='finished') {
     const old=matches.find(m=>m.id===id);
     // Il timestamp di fine viene creato una sola volta, così un successivo
