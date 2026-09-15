@@ -6,6 +6,8 @@ let currentMatch = null;
 let lineup = [];
 let localVoted = false;
 let calendarDraft = [];
+let currentMatchStats = {};
+let statsRenderToken = 0;
 
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
@@ -186,10 +188,99 @@ function renderLeague(){
   $('#leagueName').textContent=window.currentLeagueData.name||leagueTeam()||'Best&Faires';
   $('#seasonName').textContent=`Stagione ${window.currentLeagueData.season||''}`;
 }
+
+async function loadMatchStats(matchId=currentMatch?.id){
+  currentMatchStats={};
+  if(!matchId) return;
+  try{
+    const snap=await db.collection('matches').doc(matchId).collection('stats').get();
+    snap.forEach(d=>{ currentMatchStats[d.id]={id:d.id,...(d.data()||{})}; });
+  }catch(e){ console.error('Caricamento statistiche partita:',e); }
+}
+function statNum(v){ const n=Number(v); return Number.isFinite(n)&&n>=0?Math.floor(n):0; }
+function renderMatchStats(){
+  const card=$('#matchStatsCard'), box=$('#matchStatsList');
+  if(!card||!box||!currentMatch) return;
+  const canEdit=isAdmin();
+  const ids=Array.isArray(currentMatch.lineup)?currentMatch.lineup:[];
+  if(!ids.length){ card.classList.toggle('hidden',!canEdit); box.innerHTML='<p class="muted">Nessun giocatore in distinta.</p>'; return; }
+  const rows=ids.map(id=>{
+    const p=players.find(x=>x.id===id); if(!p) return '';
+    const st=currentMatchStats[id]||{};
+    const played=st.appearance===1 || st.appearance===true;
+    if(canEdit){
+      return `<div class="stats-row" data-stat-player="${escapeHtml(id)}">
+        <div><b>${escapeHtml(playerName(p))}</b><div class="stats-note">${played?'Presenza registrata':'Non ancora registrato come presente'}</div></div>
+        <label title="Presenza">🏟️ <input class="stat-appearance" type="checkbox" ${played?'checked':''}></label>
+        <label title="Gol">⚽ <input class="stat-goals" type="number" min="0" step="1" value="${statNum(st.goals)}"></label>
+        <label title="Assist">🎯 <input class="stat-assists" type="number" min="0" step="1" value="${statNum(st.assists)}"></label>
+        <label title="Gialli">🟨 <input class="stat-yellow" type="number" min="0" step="1" value="${statNum(st.yellow)}"></label>
+        <label title="Rossi">🟥 <input class="stat-red" type="number" min="0" step="1" value="${statNum(st.red)}"></label>
+      </div>`;
+    }
+    if(!played) return '';
+    return `<div class="stats-row stats-readonly" data-stat-player="${escapeHtml(id)}"><div><b>${escapeHtml(playerName(p))}</b></div><span>⚽ ${statNum(st.goals)}</span><span>🎯 ${statNum(st.assists)}</span><span>🟨 ${statNum(st.yellow)}</span><span>🟥 ${statNum(st.red)}</span></div>`;
+  }).join('');
+  card.classList.toggle('hidden',!canEdit && !Object.keys(currentMatchStats).length);
+  if(canEdit){
+    box.innerHTML=`<div class="stats-grid stats-header"><span>Giocatore</span><span>Pres.</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span></div>${rows||'<p class="muted">Nessun giocatore.</p>'}`;
+  }else{
+    box.innerHTML=`<div class="stats-row stats-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}`;
+  }
+}
+async function saveMatchStats(){
+  if(!isAdmin()||!currentMatch) return;
+  const btn=$('#saveMatchStatsBtn'), rows=[...document.querySelectorAll('#matchStatsList .stats-row[data-stat-player]')];
+  if(btn){btn.disabled=true;btn.textContent='⏳ Salvataggio...';}
+  try{
+    const batch=db.batch();
+    rows.forEach(row=>{
+      const playerId=row.dataset.statPlayer;
+      const appearance=row.querySelector('.stat-appearance')?.checked;
+      const ref=db.collection('matches').doc(currentMatch.id).collection('stats').doc(playerId);
+      if(!appearance){ batch.delete(ref); return; }
+      const data={appearance:1,goals:statNum(row.querySelector('.stat-goals')?.value),assists:statNum(row.querySelector('.stat-assists')?.value),yellow:statNum(row.querySelector('.stat-yellow')?.value),red:statNum(row.querySelector('.stat-red')?.value),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+      batch.set(ref,data,{merge:true});
+    });
+    await batch.commit();
+    await loadMatchStats(currentMatch.id); renderMatchStats();
+    const msg=$('#matchStatsMsg'); if(msg) msg.textContent='✅ Tabellino salvato.';
+  }catch(e){
+    console.error('Salvataggio statistiche:',e);
+    alert(e.code==='permission-denied'?'❌ Firebase ha rifiutato il salvataggio del tabellino.':'❌ Impossibile salvare il tabellino.');
+  }finally{ if(btn){btn.disabled=false;btn.textContent='💾 Salva tabellino';} }
+}
+async function loadSeasonStats(){
+  const totals=Object.fromEntries(players.map(p=>[p.id,{...p,appearances:0,goals:0,assists:0,yellow:0,red:0}]));
+  try{
+    await Promise.all(matches.map(async m=>{
+      const snap=await db.collection('matches').doc(m.id).collection('stats').get();
+      snap.forEach(d=>{
+        if(!totals[d.id]) return;
+        const x=d.data()||{};
+        if(x.appearance===1 || x.appearance===true) totals[d.id].appearances+=1;
+        totals[d.id].goals+=statNum(x.goals); totals[d.id].assists+=statNum(x.assists); totals[d.id].yellow+=statNum(x.yellow); totals[d.id].red+=statNum(x.red);
+      });
+    }));
+  }catch(e){console.error('Statistiche stagione:',e);}
+  return Object.values(totals).sort((a,b)=>b.goals-a.goals||b.assists-a.assists||b.appearances-a.appearances||playerName(a).localeCompare(playerName(b),'it'));
+}
+async function renderSeasonStats(){
+  const box=$('#seasonStatsTable'); if(!box) return;
+  const rows=await loadSeasonStats();
+  box.innerHTML=`<div class="card"><span class="eyebrow">STAGIONE</span><h3>Statistiche giocatori</h3><p class="muted">Riepilogo cumulativo delle partite disputate. I dati di ogni singola partita restano conservati nel relativo tabellino.</p><div class="stats-season"><div class="stats-header"><span>Giocatore</span><span>Pres.</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span></div>${rows.map(p=>`<div class="stats-row"><div><b>${escapeHtml(playerName(p))}</b></div><span>${p.appearances}</span><span>${p.goals}</span><span>${p.assists}</span><span>${p.yellow}</span><span>${p.red}</span></div>`).join('')}</div></div>`;
+}
+
 function renderMatch(){
   if(!currentMatch){
-    $('#matchTitle').textContent='Nessuna partita caricata'; $('#rosterList').innerHTML='<p class="muted">L’Admin deve inserire una partita nel calendario.</p>'; $('#votingCard')?.classList.add('hidden'); return;
+    $('#matchTitle').textContent='Nessuna partita caricata'; $('#rosterList').innerHTML='<p class="muted">L’Admin deve inserire una partita nel calendario.</p>'; $('#votingCard')?.classList.add('hidden'); $('#matchStatsCard')?.classList.add('hidden'); return;
   }
+  const statsMatchId=currentMatch.id;
+  if(renderMatch._loadedStatsFor!==statsMatchId){
+    renderMatch._loadedStatsFor=statsMatchId;
+    loadMatchStats(statsMatchId).then(()=>{ if(currentMatch?.id===statsMatchId){ renderMatchStats(); } });
+  }
+  renderMatchStats();
   const home=currentMatch.homeTeam||leagueTeam(), away=currentMatch.awayTeam||currentMatch.opponent||'Avversario';
   const title=`${home} vs ${away}`;
   $('#matchTitle').textContent=title; const mh=$('#match h2'); if(mh) mh.textContent=title;
@@ -417,6 +508,7 @@ async function renderRanking(){
 }
 function renderPlayers(){
   $('#playersTable').innerHTML=players.map(p=>`<div class="rank"><span class="pos">⚽</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${lineup.includes(p.id)?'In distinta':'Fuori distinta'}</span></div></div>`).join('')||'<p class="muted">Nessun giocatore.</p>';
+  renderSeasonStats();
 }
 function updateProgress(){
   if(!currentMatch)return; const total=lineup.length;
@@ -610,7 +702,12 @@ async function commitImport(){
   }catch(e){console.error(e);alert(e.message.startsWith('La partita')?`❌ ${e.message}`:'❌ Importazione non completata. Nessuna garanzia di rollback automatico.');}
 }
 
-$('#calendarList')?.addEventListener('click',e=>{const b=e.target.closest('.edit-match');if(b){const m=matches.find(x=>x.id===b.dataset.id);openMatchEditor(m);}});
+$('#calendarList')?.addEventListener('click',e=>{
+  const statsBtn=e.target.closest('.stats-match');
+  if(statsBtn&&isAdmin()){ const m=matches.find(x=>x.id===statsBtn.dataset.id); if(m){ currentMatch=m; lineup=Array.isArray(m.lineup)?[...m.lineup]:[]; renderMatch(); show('match'); } return; }
+  const b=e.target.closest('.edit-match'); if(b){const m=matches.find(x=>x.id===b.dataset.id);openMatchEditor(m);}
+});
+$('#saveMatchStatsBtn')?.addEventListener('click',saveMatchStats);
 $('#newMatchBtn')?.addEventListener('click',()=>openMatchEditor());
 $('#cancelMatchEdit')?.addEventListener('click',closeMatchEditor); $('#closeMatchModal')?.addEventListener('click',closeMatchEditor);
 $('#matchEditForm')?.addEventListener('submit',saveMatchEditor);
@@ -629,5 +726,5 @@ $('#dashboardMatchCard')?.addEventListener('keydown',e=>{ if((e.key==='Enter'||e
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
 let voteTimer=null;
 function startVoteTimer(){ if(voteTimer) clearInterval(voteTimer); voteTimer=setInterval(()=>{ if(currentMatch){ renderDashboard(); renderMatch(); } },1000); }
-async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Faires Beta.16: classifiche riallineabili e ricalcolo Admin.');}
+async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Faires Beta.19: tabellini partita e statistiche stagione.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};

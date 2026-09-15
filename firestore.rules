@@ -22,6 +22,19 @@ service cloud.firestore {
         && request.resource.data.third >= 0
         && request.resource.data.votes >= 0;
     }
+    function validStatBase() {
+      return request.resource.data.keys().hasOnly(['appearance','goals','assists','yellow','red'])
+        && request.resource.data.appearance is int
+        && request.resource.data.goals is int
+        && request.resource.data.assists is int
+        && request.resource.data.yellow is int
+        && request.resource.data.red is int
+        && request.resource.data.appearance == 1
+        && request.resource.data.goals >= 0
+        && request.resource.data.assists >= 0
+        && request.resource.data.yellow >= 0
+        && request.resource.data.red >= 0;
+    }
 
     match /users/{id} {
       allow get: if signedIn() && (request.auth.uid == id || admin());
@@ -89,6 +102,17 @@ service cloud.firestore {
       // Risultati aggregati pubblici: i Player possono leggerli, ma non possono
       // modificare arbitrariamente la classifica. L'aggiornamento è ammesso solo
       // nella stessa operazione atomica che crea il proprio voto.
+      match /stats/{playerId} {
+        // Le statistiche di partita sono visibili ai membri della stessa lega,
+        // mentre solo l'Admin può inserirle o modificarle.
+        allow get, list: if signedIn() && (admin() || me().leagueId == matchData(matchId).leagueId);
+        allow create, update: if admin()
+          && me().leagueId == matchData(matchId).leagueId
+          && playerId in matchData(matchId).lineup
+          && validStatBase();
+        allow delete: if admin();
+      }
+
       match /publicResults/{playerId} {
         allow get, list: if signedIn() && (admin() || me().leagueId == matchData(matchId).leagueId);
 

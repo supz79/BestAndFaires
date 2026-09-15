@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#111827">
   <meta name="description" content="Best&Faires - il voto ai migliori in campo">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="css/style.css?v=7.17.2">
+  <link rel="stylesheet" href="css/style.css?v=7.19">
   <title>Best&Faires</title>
 </head>
 <body>
@@ -98,6 +98,15 @@
       <div id="rosterList" class="check-list"></div>
       <button id="lockBtn" class="primary">🔒 Blocca distinta</button><p id="matchLockStatus" class="muted"></p>
     </div>
+    <div id="matchStatsCard" class="card hidden">
+      <span class="eyebrow">TABELLINO</span>
+      <h3>Statistiche della partita</h3>
+      <p class="muted">L'Admin può registrare le statistiche dei giocatori che hanno disputato la partita.</p>
+      <div id="matchStatsList"></div>
+      <div class="modal-actions"><button id="saveMatchStatsBtn" class="primary" type="button">💾 Salva tabellino</button></div>
+      <p id="matchStatsMsg" class="success"></p>
+    </div>
+
     <div id="votingCard" class="card hidden">
       <span class="eyebrow">VOTAZIONE</span>
       <h3>Vota i migliori 3</h3>
@@ -119,7 +128,7 @@
 
   <section id="players" class="screen">
     <div class="section-head"><button class="back" data-screen="dashboard">‹</button><div><span class="eyebrow">ROSA</span><h2>Giocatori</h2></div></div>
-    <div class="card"><div id="playersTable"></div></div>
+    <div class="card"><div id="playersTable"></div><div id="seasonStatsTable" class="stats-season"></div></div>
   </section>
 
   <section id="calendar" class="screen">

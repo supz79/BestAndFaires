@@ -62,3 +62,18 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 @media(max-width:650px){.topbar{min-height:70px}.brand-logo{width:min(245px,62vw);max-height:52px}.login-logo{width:96%;margin-bottom:14px;}}
 
 .verify-email{font-weight:800;font-size:18px;text-align:center;word-break:break-word;color:#111827;margin:4px 0 18px}.verify-actions{display:grid;gap:10px}.login-card .verify-actions .ghost{color:#111827;border-color:#374151;background:#fff}.login-card .verify-actions .ghost:hover{background:#f3f4f6}
+
+/* Beta 7.19 - statistiche partita e stagione */
+.stats-grid{display:grid;grid-template-columns:minmax(180px,1.4fr) repeat(4,minmax(72px,.55fr));gap:10px;align-items:center}
+.stats-header{font-size:.78rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.stats-row{display:grid;grid-template-columns:minmax(180px,1.4fr) repeat(4,minmax(72px,.55fr));gap:10px;align-items:center;padding:12px 0;border-top:1px solid #e5e7eb}
+.stats-row b{font-size:.95rem}
+.stats-row.stats-readonly{grid-template-columns:minmax(180px,1.4fr) repeat(4,minmax(72px,.55fr))}
+.stats-row label{display:flex;align-items:center;gap:7px;justify-content:center;font-size:.82rem;color:#475569}
+.stats-row input[type=number]{width:72px;padding:9px 8px;text-align:center}
+.stats-row input[type=checkbox]{width:18px;height:18px}
+.stats-note{font-size:.78rem;color:#64748b}
+.stats-season{margin-top:18px}
+.stats-season .stats-row{grid-template-columns:minmax(180px,1.6fr) repeat(5,minmax(68px,.55fr))}
+.stats-season .stats-header{display:grid;grid-template-columns:minmax(180px,1.6fr) repeat(5,minmax(68px,.55fr));gap:10px}
+@media(max-width:760px){.stats-grid,.stats-row,.stats-season .stats-row{grid-template-columns:minmax(150px,1.4fr) repeat(4,62px)}.stats-season .stats-row{grid-template-columns:minmax(150px,1.35fr) repeat(5,58px);overflow-x:auto}.stats-season{overflow-x:auto}.stats-row input[type=number]{width:58px}.stats-row{min-width:520px}.stats-season .stats-header{min-width:500px}}
