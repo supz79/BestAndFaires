@@ -113,6 +113,21 @@ service cloud.firestore {
         allow delete: if admin();
       }
 
+      match /summary/{summaryId} {
+        allow get, list: if signedIn()
+          && (admin() || me().leagueId == matchData(matchId).leagueId);
+
+        allow create, update: if admin()
+          && me().leagueId == matchData(matchId).leagueId
+          && request.resource.data.keys().hasOnly(['homeScore','awayScore','updatedAt'])
+          && request.resource.data.homeScore is int
+          && request.resource.data.awayScore is int
+          && request.resource.data.homeScore >= 0
+          && request.resource.data.awayScore >= 0;
+
+        allow delete: if admin();
+      }
+
       match /publicResults/{playerId} {
         allow get, list: if signedIn() && (admin() || me().leagueId == matchData(matchId).leagueId);
 

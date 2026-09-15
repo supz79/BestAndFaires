@@ -1,4 +1,4 @@
-# Best&Faires Beta 7.20
+# Best&Faires Beta 7.20.1.1
 
 Nuova funzione: storico delle partite disputate con risultato, statistiche dei giocatori e MVP automatico basato sui risultati pubblici della votazione.
 

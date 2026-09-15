@@ -233,7 +233,10 @@ async function renderPlayedMatches(){
     const tie=top.length>1 && (top[1][1].points||0)===(top[0][1].points||0) && (top[1][1].first||0)===(top[0][1].first||0) && (top[1][1].second||0)===(top[0][1].second||0) && (top[1][1].third||0)===(top[0][1].third||0);
     const mvpText=mvp?(tie?`⭐ MVP ex aequo: <b>${escapeHtml(playerName(mvp))}</b> e <b>${escapeHtml(playerName(players.find(p=>p.id===top[1][0])||{}))}</b>`:`⭐ MVP: <b>${escapeHtml(playerName(mvp))}</b> <span class="sub">${top[0][1].points||0} pt</span>`):'⭐ MVP: non disponibile';
     const rows=played.map(id=>{const p=players.find(x=>x.id===id); if(!p)return ''; const st=statMap[id]||{}; const r=results[id]||{}; return `<div class="played-player-row"><b>${escapeHtml(playerName(p))}</b><span>⚽ ${statNum(st.goals)}</span><span>🎯 ${statNum(st.assists)}</span><span>🟨 ${statNum(st.yellow)}</span><span>🟥 ${statNum(st.red)}</span><span>⭐ ${statNum(r.points)} pt</span></div>`;}).join('');
-    body.innerHTML=`<div class="played-score">${matchScoreText(m,summary)}</div><div class="mvp-box">${mvpText}</div><div class="played-stats"><div class="played-player-row played-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span><span>Voto</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}</div>`;
+    const scorers=[];
+    played.forEach(id=>{ const p=players.find(x=>x.id===id); const st=statMap[id]||{}; if(!p) return; for(let i=0;i<statNum(st.goals);i++) scorers.push(playerName(p)); });
+    const scorersText=scorers.length ? `<div class="scorers-line"><b>⚽ Marcatori:</b> ${scorers.map(n=>escapeHtml(n)).join(', ')}</div>` : '';
+    body.innerHTML=`<div class="played-score">${matchScoreText(m,summary)}</div>${scorersText}<div class="mvp-box">${mvpText}</div><div class="played-stats"><div class="played-player-row played-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span><span>Voto</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}</div>`;
   }
 }
 
@@ -256,7 +259,12 @@ function renderMatchStats(){
   if(resultBox){
     const home=currentMatch.homeTeam||leagueTeam(), away=currentMatch.awayTeam||currentMatch.opponent||'Avversario';
     if(canEdit){
-      resultBox.innerHTML=`<div class="result-editor-title">🏟️ Risultato partita</div><div class="result-inputs"><label>${escapeHtml(home)}<input id="homeScore" type="number" min="0" step="1" value="${statNum(currentMatchSummary.homeScore)}"></label><span>−</span><label>${escapeHtml(away)}<input id="awayScore" type="number" min="0" step="1" value="${statNum(currentMatchSummary.awayScore)}"></label></div>`;
+      const localIsHome=isLocalTeamName(home);
+      const localTeam=localIsHome?home:away;
+      const opponentTeam=localIsHome?away:home;
+      const localGoals=Object.values(currentMatchStats||{}).reduce((sum,st)=>sum+statNum(st.goals),0);
+      const opponentScore=localIsHome?statNum(currentMatchSummary.awayScore):statNum(currentMatchSummary.homeScore);
+      resultBox.innerHTML=`<div class="result-editor-title">🏟️ Risultato partita</div><div class="result-inputs"><div class="result-auto-score"><span class="result-team">${escapeHtml(localTeam)}</span><strong id="localScoreDisplay">${localGoals}</strong><small>gol nel tabellino</small></div><span>−</span><label>${escapeHtml(opponentTeam)}<input id="opponentScore" type="number" min="0" step="1" value="${opponentScore}"></label></div>`;
     }else resultBox.innerHTML='';
   }
   const ids=Array.isArray(currentMatch.lineup)?currentMatch.lineup:[];
@@ -292,16 +300,22 @@ async function saveMatchStats(){
   try{
     const batch=db.batch();
     const summaryRef=db.collection('matches').doc(currentMatch.id).collection('summary').doc('main');
-    const homeScore=statNum($('#homeScore')?.value), awayScore=statNum($('#awayScore')?.value);
-    batch.set(summaryRef,{homeScore,awayScore,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+    let localScore=0;
     rows.forEach(row=>{
       const playerId=row.dataset.statPlayer;
       const appearance=row.querySelector('.stat-appearance')?.checked;
+      const goals=statNum(row.querySelector('.stat-goals')?.value);
+      if(appearance) localScore += goals;
       const ref=db.collection('matches').doc(currentMatch.id).collection('stats').doc(playerId);
       if(!appearance){ batch.delete(ref); return; }
-      const data={appearance:1,goals:statNum(row.querySelector('.stat-goals')?.value),assists:statNum(row.querySelector('.stat-assists')?.value),yellow:statNum(row.querySelector('.stat-yellow')?.value),red:statNum(row.querySelector('.stat-red')?.value)};
+      const data={appearance:1,goals,assists:statNum(row.querySelector('.stat-assists')?.value),yellow:statNum(row.querySelector('.stat-yellow')?.value),red:statNum(row.querySelector('.stat-red')?.value)};
       batch.set(ref,data,{merge:true});
     });
+    const opponentScore=statNum($('#opponentScore')?.value);
+    const localIsHome=isLocalTeamName(currentMatch.homeTeam||leagueTeam());
+    const homeScore=localIsHome?localScore:opponentScore;
+    const awayScore=localIsHome?opponentScore:localScore;
+    batch.set(summaryRef,{homeScore,awayScore,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
     await batch.commit();
     await loadMatchStats(currentMatch.id); await loadMatchSummary(currentMatch.id); renderMatchStats(); await renderPlayedMatches();
     const msg=$('#matchStatsMsg'); if(msg) msg.textContent='✅ Tabellino salvato.';
