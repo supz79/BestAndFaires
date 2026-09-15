@@ -202,6 +202,9 @@ function renderMatchStats(){
   const card=$('#matchStatsCard'), box=$('#matchStatsList');
   if(!card||!box||!currentMatch) return;
   const canEdit=isAdmin();
+  const saveBtn=$('#saveMatchStatsBtn'), msg=$('#matchStatsMsg');
+  if(saveBtn) saveBtn.closest('.modal-actions')?.classList.toggle('hidden',!canEdit);
+  if(msg) msg.classList.toggle('hidden',!canEdit);
   const ids=Array.isArray(currentMatch.lineup)?currentMatch.lineup:[];
   if(!ids.length){ card.classList.toggle('hidden',!canEdit); box.innerHTML='<p class="muted">Nessun giocatore in distinta.</p>'; return; }
   const rows=ids.map(id=>{
@@ -273,7 +276,7 @@ async function renderSeasonStats(){
 
 function renderMatch(){
   if(!currentMatch){
-    $('#matchTitle').textContent='Nessuna partita caricata'; $('#rosterList').innerHTML='<p class="muted">L’Admin deve inserire una partita nel calendario.</p>'; $('#votingCard')?.classList.add('hidden'); $('#matchStatsCard')?.classList.add('hidden'); return;
+    $('#matchTitle').textContent='Nessuna partita caricata'; $('#rosterList').innerHTML='<p class="muted">L’Admin deve inserire una partita nel calendario.</p>'; $('#votingCard')?.classList.add('hidden'); $('#matchStatsCard')?.classList.add('hidden'); $('#saveMatchStatsBtn')?.closest('.modal-actions')?.classList.add('hidden'); $('#matchStatsMsg')?.classList.add('hidden'); return;
   }
   const statsMatchId=currentMatch.id;
   if(renderMatch._loadedStatsFor!==statsMatchId){
