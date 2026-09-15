@@ -7,6 +7,7 @@ let lineup = [];
 let localVoted = false;
 let calendarDraft = [];
 let currentMatchStats = {};
+let currentMatchSummary = {};
 let statsRenderToken = 0;
 
 const $ = s => document.querySelector(s);
@@ -189,6 +190,53 @@ function renderLeague(){
   $('#seasonName').textContent=`Stagione ${window.currentLeagueData.season||''}`;
 }
 
+async function loadMatchSummary(matchId=currentMatch?.id){
+  currentMatchSummary={};
+  if(!matchId) return;
+  try{
+    const snap=await db.collection('matches').doc(matchId).collection('summary').doc('main').get();
+    currentMatchSummary=snap.exists?({id:snap.id,...(snap.data()||{})}):{};
+  }catch(e){ console.error('Caricamento riepilogo partita:',e); }
+}
+function matchScoreText(m, summary){
+  const home=m?.homeTeam||leagueTeam(), away=m?.awayTeam||m?.opponent||'Avversario';
+  const has=Number.isInteger(Number(summary?.homeScore)) && Number.isInteger(Number(summary?.awayScore));
+  return has ? `${escapeHtml(home)} <b>${Number(summary.homeScore)} - ${Number(summary.awayScore)}</b> ${escapeHtml(away)}` : `${escapeHtml(home)} <b>–</b> ${escapeHtml(away)}`;
+}
+async function loadPublicMatchResults(matchId){
+  const totals={};
+  try{
+    const snap=await db.collection('matches').doc(matchId).collection('publicResults').get();
+    snap.forEach(d=>{totals[d.id]={id:d.id,...(d.data()||{})};});
+  }catch(e){ console.error('Risultati pubblici partita:',e); }
+  return totals;
+}
+async function renderPlayedMatches(){
+  const box=$('#playedMatchesList'); if(!box) return;
+  const finished=matches.filter(m=>String(m.status||'')==='finished').sort((a,b)=>(parseDateTime(b)?.getTime()||0)-(parseDateTime(a)?.getTime()||0));
+  if(!finished.length){ box.innerHTML='<div class="card"><p class="muted">Nessuna partita disputata ancora.</p></div>'; return; }
+  box.innerHTML="<div class='card'><p class='muted'>Qui trovi il riepilogo delle partite terminate. I voti individuali restano segreti; sono visibili solo i risultati aggregati e l'MVP.</p></div>"+finished.map(m=>`<div class="card played-match-card" data-played-match="${escapeHtml(m.id)}"><div class="played-match-head"><div><span class="eyebrow">${escapeHtml(m.fase||'')} · G${escapeHtml(m.giornata||m.day||'')}</span><h3>${escapeHtml(m.homeTeam||leagueTeam())} <span class="score-placeholder">vs</span> ${escapeHtml(m.awayTeam||m.opponent||'Avversario')}</h3><small>${formatDateTime(parseDateTime(m))}</small></div><span class="pill closed">TERMINATA</span></div><div class="played-match-body"><span>Caricamento riepilogo...</span></div></div>`).join('');
+  for(const m of finished){
+    const card=box.querySelector(`[data-played-match="${CSS.escape(m.id)}"]`); if(!card) continue;
+    const body=card.querySelector('.played-match-body');
+    const [sumSnap,statsSnap,results]=await Promise.all([
+      db.collection('matches').doc(m.id).collection('summary').doc('main').get().catch(()=>null),
+      db.collection('matches').doc(m.id).collection('stats').get().catch(()=>null),
+      loadPublicMatchResults(m.id)
+    ]);
+    const summary=sumSnap?.exists?(sumSnap.data()||{}):{};
+    const statMap={}; statsSnap?.forEach(d=>statMap[d.id]=d.data()||{});
+    const played=Object.keys(statMap).filter(id=>statMap[id].appearance===1||statMap[id].appearance===true);
+    const ranked=Object.entries(results).sort((a,b)=>(b[1].points||0)-(a[1].points||0)||(b[1].first||0)-(a[1].first||0)||(b[1].second||0)-(a[1].second||0)||(b[1].third||0)-(a[1].third||0));
+    const top=ranked.filter(([,r])=>(r.points||0)>0);
+    const mvp=top.length?players.find(p=>p.id===top[0][0]):null;
+    const tie=top.length>1 && (top[1][1].points||0)===(top[0][1].points||0) && (top[1][1].first||0)===(top[0][1].first||0) && (top[1][1].second||0)===(top[0][1].second||0) && (top[1][1].third||0)===(top[0][1].third||0);
+    const mvpText=mvp?(tie?`⭐ MVP ex aequo: <b>${escapeHtml(playerName(mvp))}</b> e <b>${escapeHtml(playerName(players.find(p=>p.id===top[1][0])||{}))}</b>`:`⭐ MVP: <b>${escapeHtml(playerName(mvp))}</b> <span class="sub">${top[0][1].points||0} pt</span>`):'⭐ MVP: non disponibile';
+    const rows=played.map(id=>{const p=players.find(x=>x.id===id); if(!p)return ''; const st=statMap[id]||{}; const r=results[id]||{}; return `<div class="played-player-row"><b>${escapeHtml(playerName(p))}</b><span>⚽ ${statNum(st.goals)}</span><span>🎯 ${statNum(st.assists)}</span><span>🟨 ${statNum(st.yellow)}</span><span>🟥 ${statNum(st.red)}</span><span>⭐ ${statNum(r.points)} pt</span></div>`;}).join('');
+    body.innerHTML=`<div class="played-score">${matchScoreText(m,summary)}</div><div class="mvp-box">${mvpText}</div><div class="played-stats"><div class="played-player-row played-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span><span>Voto</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}</div>`;
+  }
+}
+
 async function loadMatchStats(matchId=currentMatch?.id){
   currentMatchStats={};
   if(!matchId) return;
@@ -202,9 +250,15 @@ function renderMatchStats(){
   const card=$('#matchStatsCard'), box=$('#matchStatsList');
   if(!card||!box||!currentMatch) return;
   const canEdit=isAdmin();
-  const saveBtn=$('#saveMatchStatsBtn'), msg=$('#matchStatsMsg');
+  const saveBtn=$('#saveMatchStatsBtn'), msg=$('#matchStatsMsg'), resultBox=$('#matchResultEditor');
   if(saveBtn) saveBtn.closest('.modal-actions')?.classList.toggle('hidden',!canEdit);
   if(msg) msg.classList.toggle('hidden',!canEdit);
+  if(resultBox){
+    const home=currentMatch.homeTeam||leagueTeam(), away=currentMatch.awayTeam||currentMatch.opponent||'Avversario';
+    if(canEdit){
+      resultBox.innerHTML=`<div class="result-editor-title">🏟️ Risultato partita</div><div class="result-inputs"><label>${escapeHtml(home)}<input id="homeScore" type="number" min="0" step="1" value="${statNum(currentMatchSummary.homeScore)}"></label><span>−</span><label>${escapeHtml(away)}<input id="awayScore" type="number" min="0" step="1" value="${statNum(currentMatchSummary.awayScore)}"></label></div>`;
+    }else resultBox.innerHTML='';
+  }
   const ids=Array.isArray(currentMatch.lineup)?currentMatch.lineup:[];
   if(!ids.length){ card.classList.toggle('hidden',!canEdit); box.innerHTML='<p class="muted">Nessun giocatore in distinta.</p>'; return; }
   const rows=ids.map(id=>{
@@ -237,6 +291,9 @@ async function saveMatchStats(){
   if(btn){btn.disabled=true;btn.textContent='⏳ Salvataggio...';}
   try{
     const batch=db.batch();
+    const summaryRef=db.collection('matches').doc(currentMatch.id).collection('summary').doc('main');
+    const homeScore=statNum($('#homeScore')?.value), awayScore=statNum($('#awayScore')?.value);
+    batch.set(summaryRef,{homeScore,awayScore,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
     rows.forEach(row=>{
       const playerId=row.dataset.statPlayer;
       const appearance=row.querySelector('.stat-appearance')?.checked;
@@ -246,7 +303,7 @@ async function saveMatchStats(){
       batch.set(ref,data,{merge:true});
     });
     await batch.commit();
-    await loadMatchStats(currentMatch.id); renderMatchStats();
+    await loadMatchStats(currentMatch.id); await loadMatchSummary(currentMatch.id); renderMatchStats(); await renderPlayedMatches();
     const msg=$('#matchStatsMsg'); if(msg) msg.textContent='✅ Tabellino salvato.';
   }catch(e){
     console.error('Salvataggio statistiche:',e);
@@ -281,7 +338,7 @@ function renderMatch(){
   const statsMatchId=currentMatch.id;
   if(renderMatch._loadedStatsFor!==statsMatchId){
     renderMatch._loadedStatsFor=statsMatchId;
-    loadMatchStats(statsMatchId).then(()=>{ if(currentMatch?.id===statsMatchId){ renderMatchStats(); } });
+    Promise.all([loadMatchStats(statsMatchId),loadMatchSummary(statsMatchId)]).then(()=>{ if(currentMatch?.id===statsMatchId){ renderMatchStats(); } });
   }
   renderMatchStats();
   const home=currentMatch.homeTeam||leagueTeam(), away=currentMatch.awayTeam||currentMatch.opponent||'Avversario';
@@ -577,7 +634,7 @@ function renderCalendar(){
   matches.forEach(m=>{const phase=String(m.fase||'').toLowerCase()==='ritorno'?'Ritorno':'Andata';grouped[phase].push(m);});
   const section=(name,arr)=>`<div class="calendar-group"><h3>${name}</h3>${arr.sort((a,b)=>(Number(a.giornata||a.day)||0)-(Number(b.giornata||b.day)||0)).map(m=>{
     const d=parseDateTime(m), title=`${m.homeTeam||leagueTeam()} vs ${m.awayTeam||m.opponent||''}`;
-    return `<div class="calendar-row"><div><b>G${escapeHtml(m.giornata||m.day||'')}</b><span>${escapeHtml(title)}</span><small>${formatDateTime(d)}</small></div><span class="pill ${statusClass(m.status)}">${statusLabel(m.status)}</span><button class="small-btn edit-match" data-id="${escapeHtml(m.id)}">✏️ Modifica</button></div>`;
+    return `<div class="calendar-row"><div><b>G${escapeHtml(m.giornata||m.day||'')}</b><span>${escapeHtml(title)}</span><small>${formatDateTime(d)}</small></div><span class="pill ${statusClass(m.status)}">${statusLabel(m.status)}</span><div class="calendar-actions"><button class="small-btn stats-match" data-id="${escapeHtml(m.id)}">📊 Tabellino</button><button class="small-btn edit-match" data-id="${escapeHtml(m.id)}">✏️ Modifica</button></div></div>`;
   }).join('')||'<p class="muted">Nessuna partita.</p>'}</div>`;
   box.innerHTML=section('Andata',grouped.Andata)+section('Ritorno',grouped.Ritorno);
 }
@@ -721,7 +778,7 @@ $('#importCancel')?.addEventListener('click',()=>{$('#importPreviewCard').classL
 function show(id){
   if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return;
   $$('.screen').forEach(x=>x.classList.remove('active')); $('#'+id)?.classList.add('active');
-  if(id==='ranking')renderRanking(); if(id==='players')renderPlayers(); if(id==='match')renderMatch(); if(id==='calendar')renderCalendar(); if(id==='dashboard')renderDashboard();
+  if(id==='ranking')renderRanking(); if(id==='players')renderPlayers(); if(id==='match')renderMatch(); if(id==='calendar')renderCalendar(); if(id==='played')renderPlayedMatches(); if(id==='dashboard')renderDashboard();
 }
 $$('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
 $('#dashboardMatchCard')?.addEventListener('click',()=>{ if(currentMatch) show('match'); });

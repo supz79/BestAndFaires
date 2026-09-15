@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#111827">
   <meta name="description" content="Best&Faires - il voto ai migliori in campo">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="css/style.css?v=7.19">
+  <link rel="stylesheet" href="css/style.css?v=7.20">
   <title>Best&Faires</title>
 </head>
 <body>
@@ -78,6 +78,7 @@
       <button class="action card" data-screen="match"><span>📋</span><b>Gestisci partita</b><small>Distinta e votazione</small></button>
       <button class="action card" data-screen="ranking"><span>🏆</span><b>Classifiche</b><small>Giornata e cumulativa</small></button>
       <button class="action card" data-screen="players"><span>👥</span><b>Rosa squadra</b><small>Giocatori registrati</small></button>
+      <button class="action card" data-screen="played"><span>🏟️</span><b>Partite disputate</b><small>Risultati, statistiche e MVP</small></button>
       <button class="action card admin-only" data-screen="admin"><span>⚙️</span><b>Amministrazione</b><small>Gestione lega</small></button>
       <button class="action card admin-only" data-screen="calendar"><span>📅</span><b>Calendario</b><small>Importa e modifica le partite</small></button>
     </div>
@@ -101,7 +102,8 @@
     <div id="matchStatsCard" class="card hidden">
       <span class="eyebrow">TABELLINO</span>
       <h3>Statistiche della partita</h3>
-      <p class="muted">L'Admin può registrare le statistiche dei giocatori che hanno disputato la partita.</p>
+      <p class="muted">L'Admin può registrare il risultato e le statistiche dei giocatori che hanno disputato la partita.</p>
+      <div id="matchResultEditor" class="match-result-editor"></div>
       <div id="matchStatsList"></div>
       <div class="modal-actions"><button id="saveMatchStatsBtn" class="primary" type="button">💾 Salva tabellino</button></div>
       <p id="matchStatsMsg" class="success"></p>
@@ -118,6 +120,12 @@
       <button id="submitVote" class="primary">Conferma voto</button>
       <p id="voteMsg" class="success"></p>
     </div>
+  </section>
+
+
+  <section id="played" class="screen">
+    <div class="section-head"><button class="back" data-screen="dashboard">‹</button><div><span class="eyebrow">STORICO</span><h2>Partite disputate</h2></div></div>
+    <div id="playedMatchesList"></div>
   </section>
 
   <section id="ranking" class="screen">
@@ -203,6 +211,6 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/firebase.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/app.js?v=7.18"></script>
+<script src="js/app.js?v=7.20"></script>
 </body>
 </html>
