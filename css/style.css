@@ -60,3 +60,5 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 .login-logo{display:block;width:min(430px,92%);height:auto;margin:0 auto 18px;object-fit:contain;}
 .login-card .section-head{margin-top:4px;}
 @media(max-width:650px){.topbar{min-height:70px}.brand-logo{width:min(245px,62vw);max-height:52px}.login-logo{width:96%;margin-bottom:14px;}}
+
+.verify-email{font-weight:800;font-size:18px;text-align:center;word-break:break-word;color:#111827;margin:4px 0 18px}.verify-actions{display:grid;gap:10px}.login-card .verify-actions .ghost{color:#111827;border-color:#374151;background:#fff}.login-card .verify-actions .ghost:hover{background:#f3f4f6}

@@ -48,6 +48,22 @@
     </div>
   </section>
 
+  <section id="verifyEmail" class="screen">
+    <div class="card login-card">
+      <img class="login-logo" src="assets/best-faires-logo.png" alt="Best&Faires - Fair Play, Better Team">
+      <div class="section-head"><div><span class="eyebrow">VERIFICA EMAIL</span><h2>Controlla la tua email</h2></div></div>
+      <p class="muted">Abbiamo inviato un link di verifica a:</p>
+      <p id="verifyEmailText" class="verify-email"></p>
+      <p class="muted">Apri il messaggio e clicca sul link. Poi torna qui e premi <b>Ho verificato la mia email</b>.</p>
+      <div class="verify-actions">
+        <button id="checkVerificationBtn" class="primary" type="button">✅ Ho verificato la mia email</button>
+        <button id="resendVerificationBtn" class="ghost" type="button">📧 Invia nuovamente email</button>
+        <button id="verifyLogoutBtn" class="ghost" type="button">Esci</button>
+      </div>
+      <p id="verifyMsg" class="success"></p>
+    </div>
+  </section>
+
   <section id="dashboard" class="screen">
     <div class="hero card">
       <div>
@@ -178,6 +194,6 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/firebase.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/app.js?v=7.17"></script>
+<script src="js/app.js?v=7.18"></script>
 </body>
 </html>

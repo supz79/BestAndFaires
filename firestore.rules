@@ -5,7 +5,7 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
     function admin() { return signedIn() && me().role == 'admin' && me().active == true; }
-    function player() { return signedIn() && me().role == 'player' && me().active == true; }
+    function player() { return signedIn() && request.auth.token.email_verified == true && me().role == 'player' && me().active == true; }
     function matchData(matchId) { return get(/databases/$(database)/documents/matches/$(matchId)).data; }
     function voteAfter(matchId) { return getAfter(/databases/$(database)/documents/matches/$(matchId)/votes/$(request.auth.uid)).data; }
     function voteBeforeExists(matchId) { return exists(/databases/$(database)/documents/matches/$(matchId)/votes/$(request.auth.uid)); }
