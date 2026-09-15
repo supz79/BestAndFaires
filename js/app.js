@@ -181,7 +181,7 @@ async function loadLeague(){
 async function refresh(){
   try{
     await loadLeague(); await loadPlayers(); await loadMatches();
-    renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar(); renderAdminPlayers(); await loadPendingRegistrations();
+    renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar(); await renderAdminPlayers(); await loadPendingRegistrations();
     await syncPublicResultsForAdmin();
     await renderRanking(); await loadOwnVoteState(); renderMatch();
   }catch(e){ console.error(e); const msg=$('#voteMsg'); if(msg) msg.textContent='❌ Errore nel caricamento dei dati da Firebase.'; }
@@ -659,9 +659,67 @@ async function addPlayerFromAdmin(e){
     $('#addPlayerForm').reset(); await refresh(); alert(`✅ ${nome} ${cognome} aggiunto alla rosa.`);
   }catch(e){console.error('Aggiunta giocatore:',e);alert('❌ Impossibile aggiungere il giocatore.');}
 }
-function renderAdminPlayers(){
+async function renderAdminPlayers(){
   const box=$('#adminPlayersList'); if(!box||!isAdmin())return;
-  box.innerHTML=players.map(p=>`<div class="rank"><span class="pos">⚽</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${p.userId?'🟢 Account associato':'🟠 Nessun account associato'}</span></div></div>`).join('')||'<p class="muted">Nessun giocatore.</p>';
+  try{
+    const associated=players.filter(p=>p.userId);
+    const userEntries=await Promise.all(associated.map(async p=>{
+      try{
+        const snap=await db.collection('users').doc(p.userId).get();
+        return [p.userId, snap.exists ? snap.data() : {}];
+      }catch(e){
+        console.error('Lettura utente associato:',e);
+        return [p.userId, {}];
+      }
+    }));
+    const userMap=Object.fromEntries(userEntries);
+    box.innerHTML=players.map(p=>{
+      const u=p.userId ? (userMap[p.userId]||{}) : null;
+      const email=u?.email||'Email non disponibile';
+      const action=p.userId
+        ? `<button class="small-btn" data-change-email="${escapeHtml(p.userId)}">✉️ Modifica mail utente</button>`
+        : '';
+      return `<div class="rank"><span class="pos">⚽</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${p.userId?'🟢 Account associato · '+escapeHtml(email):'🟠 Nessun account associato'}</span></div>${action}</div>`;
+    }).join('')||'<p class="muted">Nessun giocatore.</p>';
+    box.querySelectorAll('[data-change-email]').forEach(btn=>btn.addEventListener('click',()=>changePlayerEmail(btn.dataset.changeEmail)));
+  }catch(e){
+    console.error('Render gestione rosa:',e);
+    box.innerHTML='<p class="muted">Impossibile caricare gli account associati.</p>';
+  }
+}
+
+async function changePlayerEmail(userId){
+  if(!isAdmin()||!userId)return;
+  const player=players.find(p=>p.userId===userId);
+  if(!player){alert('Giocatore non trovato.');return;}
+  let currentEmail='';
+  try{
+    const snap=await db.collection('users').doc(userId).get();
+    currentEmail=snap.exists?(snap.data().email||''):'';
+  }catch(e){console.error(e);}
+  const newEmail=prompt(`Modifica email utente di ${playerName(player)}.\n\nEmail attuale: ${currentEmail||'non disponibile'}\n\nInserisci la nuova email:`, currentEmail||'');
+  if(newEmail===null)return;
+  const normalized=newEmail.trim().toLowerCase();
+  if(!normalized){alert('Inserisci un indirizzo email.');return;}
+  if(normalized===String(currentEmail).trim().toLowerCase()){alert('La nuova email coincide con quella attuale.');return;}
+  if(!confirm(`Confermi la modifica dell'email di ${playerName(player)}?\n\nNuova email: ${normalized}\n\nIl Player dovrà verificare nuovamente il nuovo indirizzo.`))return;
+  try{
+    const fn=firebase.app().functions('europe-west8').httpsCallable('updatePlayerEmail');
+    const result=await fn({uid:userId,newEmail:normalized});
+    if(result?.data?.ok){
+      await refresh();
+      alert(`✅ Email aggiornata per ${playerName(player)}.\n\nNuovo indirizzo: ${normalized}\n\nIl Player dovrà accedere con la nuova email e completare nuovamente la verifica.`);
+    }else{
+      alert('❌ Modifica email non completata.');
+    }
+  }catch(e){
+    console.error('Modifica email utente:',e);
+    const msg=e?.message||'';
+    if(e?.code==='functions/already-exists') alert('❌ Questa email è già associata a un altro account Firebase.');
+    else if(e?.code==='functions/permission-denied') alert('❌ Operazione non autorizzata.');
+    else if(e?.code==='functions/not-found') alert('❌ Account Firebase non trovato.');
+    else alert(`❌ Impossibile modificare l'email.\n\n${msg||'Controlla che le Cloud Functions siano state pubblicate.'}`);
+  }
 }
 
 document.querySelector('#addPlayerForm')?.addEventListener('submit',addPlayerFromAdmin);
