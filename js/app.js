@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.16 - Ricalcolo sicuro delle classifiche */
+/* Best&Faires Beta.7.20.4 - A-04 Fix ricaricamento tabellino dopo logout/login */
 
 let players = [];
 let matches = [];
@@ -9,6 +9,16 @@ let calendarDraft = [];
 let currentMatchStats = {};
 let currentMatchSummary = {};
 let statsRenderToken = 0;
+
+// A-04: resetta la cache temporanea del tabellino quando cambia la sessione.
+// Evita che, dopo logout/login, il caricamento da Firestore venga saltato
+// perché la stessa partita risulta già marcata come caricata.
+function resetMatchViewCache(){
+  currentMatchStats = {};
+  currentMatchSummary = {};
+  renderMatch._loadedStatsFor = null;
+}
+window.resetMatchViewCache = resetMatchViewCache;
 
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);

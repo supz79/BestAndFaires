@@ -157,6 +157,8 @@ roleBtn.addEventListener('click', async () => {
 
 auth.onAuthStateChanged(async (user) => {
   if (!user) {
+    // A-04: forza il nuovo caricamento del tabellino alla sessione successiva.
+    if (typeof window.resetMatchViewCache === 'function') window.resetMatchViewCache();
     if(!window.isRegistering) showLogin();
     return;
   }
