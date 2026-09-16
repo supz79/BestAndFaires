@@ -156,7 +156,6 @@ roleBtn.addEventListener('click', async () => {
 });
 
 auth.onAuthStateChanged(async (user) => {
-  console.log('[A-06 DIAGNOSTIC] AUTH STATE', {uid:user?.uid||null, email:user?.email||null, emailVerified:user?.emailVerified||false});
   if (!user) {
     // A-04: forza il nuovo caricamento del tabellino alla sessione successiva.
     if (typeof window.resetMatchViewCache === 'function') window.resetMatchViewCache();

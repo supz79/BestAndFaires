@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.20.4 - A-04 Fix ricaricamento tabellino dopo logout/login */
+/* Best&Faires Beta.7.20.4 - A-06 Fix tabellino reload + progress polling */
 
 let players = [];
 let matches = [];
@@ -9,6 +9,8 @@ let calendarDraft = [];
 let currentMatchStats = {};
 let currentMatchSummary = {};
 let statsRenderToken = 0;
+let matchDetailsPromise = null;
+let matchDetailsFor = null;
 
 // A-04: resetta la cache temporanea del tabellino quando cambia la sessione.
 // Evita che, dopo logout/login, il caricamento da Firestore venga saltato
@@ -16,6 +18,8 @@ let statsRenderToken = 0;
 function resetMatchViewCache(){
   currentMatchStats = {};
   currentMatchSummary = {};
+  matchDetailsPromise = null;
+  matchDetailsFor = null;
   renderMatch._loadedStatsFor = null;
 }
 window.resetMatchViewCache = resetMatchViewCache;
@@ -187,14 +191,13 @@ async function loadLeague(){
   window.currentLeagueData=snap.exists?snap.data():{};
 }
 async function refresh(){
-  console.log('[A-06 DIAGNOSTIC] refresh START', {uid:uid(), authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, leagueId:leagueId()});
   try{
     await loadLeague(); await loadPlayers(); await loadMatches();
     renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar(); await renderAdminPlayers(); await loadPendingRegistrations();
     await syncPublicResultsForAdmin();
     await renderRanking(); await loadOwnVoteState(); renderMatch();
-    console.log('[A-06 DIAGNOSTIC] refresh END', {matchId:currentMatch?.id||null, lineup:currentMatch?.lineup||[], stats:Object.keys(currentMatchStats||{}), summary:currentMatchSummary||{}});
-  }catch(e){ console.error('[A-06 DIAGNOSTIC] refresh ERROR', e); const msg=$('#voteMsg'); if(msg) msg.textContent='❌ Errore nel caricamento dei dati da Firebase.'; }
+    updateProgress();
+  }catch(e){ console.error(e); const msg=$('#voteMsg'); if(msg) msg.textContent='❌ Errore nel caricamento dei dati da Firebase.'; }
 }
 function renderLeague(){
   if(!window.currentLeagueData) return;
@@ -203,13 +206,12 @@ function renderLeague(){
 }
 
 async function loadMatchSummary(matchId=currentMatch?.id){
-  console.log('[A-06 DIAGNOSTIC] loadMatchSummary START', {matchId, authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null});
   currentMatchSummary={};
   if(!matchId) return;
   try{
     const snap=await db.collection('matches').doc(matchId).collection('summary').doc('main').get();
     currentMatchSummary=snap.exists?({id:snap.id,...(snap.data()||{})}):{};
-  }catch(e){ console.error('[A-06 DIAGNOSTIC] loadMatchSummary ERROR', {matchId, authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, error:e}); }
+  }catch(e){ console.error('Caricamento riepilogo partita:',e); }
 }
 function matchScoreText(m, summary){
   const home=m?.homeTeam||leagueTeam(), away=m?.awayTeam||m?.opponent||'Avversario';
@@ -254,7 +256,6 @@ async function renderPlayedMatches(){
 }
 
 async function loadMatchStats(matchId=currentMatch?.id){
-  console.log('[A-06 DIAGNOSTIC] loadMatchStats START', {matchId, currentMatchId:currentMatch?.id||null, lineup:currentMatch?.lineup||[], authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null});
   currentMatchStats={};
   if(!matchId) return;
   try{
@@ -264,12 +265,11 @@ async function loadMatchStats(matchId=currentMatch?.id){
     const ids=Array.isArray(currentMatch?.lineup)?[...new Set(currentMatch.lineup)]:[];
     if(!ids.length) return;
     const refs=ids.map(playerId=>db.collection('matches').doc(matchId).collection('stats').doc(playerId));
-    const snaps=await Promise.all(refs.map((ref,i)=>ref.get().then(snap=>{ console.log('[A-06 DIAGNOSTIC] stats GET OK', {matchId, playerId:ids[i], exists:snap.exists}); return snap; }).catch(error=>{ console.error('[A-06 DIAGNOSTIC] stats GET ERROR', {matchId, playerId:ids[i], authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, error}); throw error; })));
-    console.log('[A-06 DIAGNOSTIC] loadMatchStats READS COMPLETE', {matchId, count:snaps.length});
+    const snaps=await Promise.all(refs.map(ref=>ref.get()));
     snaps.forEach((snap,i)=>{
       if(snap.exists) currentMatchStats[ids[i]]={id:ids[i],...(snap.data()||{})};
     });
-  }catch(e){ console.error('[A-06 DIAGNOSTIC] loadMatchStats ERROR', {matchId, currentMatchId:currentMatch?.id||null, lineup:currentMatch?.lineup||[], authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, error:e}); }
+  }catch(e){ console.error('Caricamento statistiche partita:',e); }
 }
 function statNum(v){ const n=Number(v); return Number.isFinite(n)&&n>=0?Math.floor(n):0; }
 function renderMatchStats(){
@@ -397,10 +397,18 @@ function renderMatch(){
     $('#matchTitle').textContent='Nessuna partita caricata'; $('#rosterList').innerHTML='<p class="muted">L’Admin deve inserire una partita nel calendario.</p>'; $('#votingCard')?.classList.add('hidden'); $('#matchStatsCard')?.classList.add('hidden'); $('#saveMatchStatsBtn')?.closest('.modal-actions')?.classList.add('hidden'); $('#matchStatsMsg')?.classList.add('hidden'); return;
   }
   const statsMatchId=currentMatch.id;
-  if(renderMatch._loadedStatsFor!==statsMatchId){
-    console.log('[A-06 DIAGNOSTIC] renderMatch FIRST LOAD', {statsMatchId, authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, lineup:currentMatch.lineup||[]});
-    renderMatch._loadedStatsFor=statsMatchId;
-    Promise.all([loadMatchStats(statsMatchId),loadMatchSummary(statsMatchId)]).then(()=>{ if(currentMatch?.id===statsMatchId){ renderMatchStats(); } });
+  // A-06: carica una sola volta per partita e riusa la stessa Promise durante
+  // i refresh del timer. In questo modo il render ogni secondo non crea
+  // richieste duplicate e il tabellino viene comunque ridisegnato al termine
+  // del caricamento asincrono.
+  if(matchDetailsFor!==statsMatchId){
+    matchDetailsFor=statsMatchId;
+    matchDetailsPromise=Promise.all([loadMatchStats(statsMatchId),loadMatchSummary(statsMatchId)])
+      .then(()=>{ renderMatch._loadedStatsFor=statsMatchId; })
+      .catch(e=>{ matchDetailsFor=null; matchDetailsPromise=null; console.error('Caricamento dati tabellino:',e); });
+  }
+  if(matchDetailsPromise){
+    matchDetailsPromise.then(()=>{ if(currentMatch?.id===statsMatchId) renderMatchStats(); });
   }
   renderMatchStats();
   const home=currentMatch.homeTeam||leagueTeam(), away=currentMatch.awayTeam||currentMatch.opponent||'Avversario';
@@ -440,7 +448,9 @@ function renderMatch(){
     else if(isPlayer() && matchHasStarted()) { timer.textContent='⏱️ Finestra di voto scaduta'; timer.className='pill closed'; }
     else timer.textContent='⏱️ Il voto sarà disponibile dopo l’inizio della partita';
   }
-  updateProgress();
+  // A-06: updateProgress non viene più richiamata dal render del tabellino.
+  // Il render gira ogni secondo per il timer e non deve generare una query
+  // Firestore ad ogni tick.
 }
 
 $('#rosterList')?.addEventListener('change',async e=>{
@@ -465,7 +475,7 @@ $('#lockBtn')?.addEventListener('click',async()=>{
 });
 async function loadOwnVoteState(){
   localVoted=false; if(!isPlayer()||!currentMatch) return;
-  try{ console.log('[A-06 DIAGNOSTIC] loadOwnVoteState START', {matchId:currentMatch.id, authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null}); const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).get(); localVoted=snap.exists; console.log('[A-06 DIAGNOSTIC] loadOwnVoteState OK', {matchId:currentMatch.id, exists:snap.exists}); }catch(e){console.error('[A-06 DIAGNOSTIC] loadOwnVoteState ERROR',{matchId:currentMatch?.id||null,authUid:firebase.auth().currentUser?.uid||null,role:window.currentUserData?.role||null,error:e});}
+  try{ const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).get(); localVoted=snap.exists; }catch(e){console.error(e);}
 }
 function populateVotes(){
   const me=currentPlayer(), eligible=players.filter(p=>lineup.includes(p.id)&&p.id!==me?.id);
@@ -646,8 +656,7 @@ function renderPlayers(){
 function updateProgress(){
   if(!currentMatch)return; const total=lineup.length;
   if(!isAdmin()){ $('#voteProgress').style.width='0%'; $('#voteCount').textContent=`${total} giocatori in distinta`; return; }
-  console.log('[A-06 DIAGNOSTIC] updateProgress START', {matchId:currentMatch.id, authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, lineupTotal:total});
-  db.collection('matches').doc(currentMatch.id).collection('votes').get().then(s=>{const voted=s.size;$('#voteProgress').style.width=(total?Math.min(100,voted/total*100):0)+'%';$('#voteCount').textContent=`${voted} / ${total} giocatori hanno votato`;}).catch(e=>console.error('[A-06 DIAGNOSTIC] updateProgress ERROR',{matchId:currentMatch?.id||null,authUid:firebase.auth().currentUser?.uid||null,role:window.currentUserData?.role||null,error:e}));
+  db.collection('matches').doc(currentMatch.id).collection('votes').get().then(s=>{const voted=s.size;$('#voteProgress').style.width=(total?Math.min(100,voted/total*100):0)+'%';$('#voteCount').textContent=`${voted} / ${total} giocatori hanno votato`;}).catch(console.error);
 }
 
 // ---------- Registrazioni e rosa Admin ----------
