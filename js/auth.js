@@ -12,9 +12,9 @@ const verifyMsg = document.querySelector('#verifyMsg');
 const verifyEmailText = document.querySelector('#verifyEmailText');
 const roleBtn = document.querySelector('#roleBtn');
 
-function showAuthenticatedArea(userData) {
+async function showAuthenticatedArea(userData) {
   window.currentUserData = userData;
-  if (typeof window.applyRolePermissions === 'function') window.applyRolePermissions(userData);
+  if (typeof window.applyRolePermissions === 'function') await window.applyRolePermissions(userData);
   document.querySelectorAll('.screen').forEach(x => x.classList.remove('active'));
   dashboardScreen.classList.add('active');
   const name = userData?.nome || userData?.displayName || firebase.auth().currentUser?.email || 'Utente';
@@ -91,7 +91,7 @@ async function continueAfterVerified(user) {
     return;
   }
   console.log('Best&Faires Beta.7.18: utente autenticato.', {uid:user.uid,role:userData.role,leagueId:userData.leagueId,emailVerified:user.emailVerified});
-  showAuthenticatedArea(userData);
+  await showAuthenticatedArea(userData);
 }
 
 document.querySelector('#showRegisterBtn')?.addEventListener('click', showRegister);
