@@ -425,6 +425,10 @@ $('#rosterList')?.addEventListener('change',async e=>{
 });
 $('#lockBtn')?.addEventListener('click',async()=>{
   if(!isAdmin()||!currentMatch) return;
+  if(matchHasStarted() && currentMatch.adminOverrideOpen!==true){
+    const ok=confirm('⚠️ ATTENZIONE\n\nLa partita è già iniziata. Sbloccare la distinta è un'operazione eccezionale e consente di modificarla dopo l'inizio della partita.\n\nVuoi procedere?');
+    if(!ok) return;
+  }
   const next=matchHasStarted()?!currentMatch.adminOverrideOpen:!currentMatch.lineupLocked;
   const data=matchHasStarted()?{adminOverrideOpen:next}:{lineupLocked:next};
   try{ await db.collection('matches').doc(currentMatch.id).update(data); Object.assign(currentMatch,data); renderMatch(); }
@@ -745,7 +749,10 @@ function openMatchEditor(match=null){
   const d=parseDateTime(match); $('#matchEditDate').value=d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
   $('#matchEditTime').value=d?`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`:'';
   $('#matchEditHome').value=match?.homeTeam||leagueTeam(); $('#matchEditAway').value=match?.awayTeam||'';
-  $('#matchEditStatus').value=match?.status||'scheduled'; $('#matchModal').classList.remove('hidden');
+  $('#matchEditStatus').value=match?.status||'scheduled';
+  const started=matchHasStarted(match);
+  ['#matchEditRound','#matchEditPhase','#matchEditDate','#matchEditTime','#matchEditHome','#matchEditAway'].forEach(sel=>{const el=$(sel); if(el) el.disabled=started;});
+  $('#matchModal').classList.remove('hidden');
 }
 function closeMatchEditor(){ $('#matchModal').classList.add('hidden'); }
 function buildScheduledStart(date,time){ return new Date(`${date}T${time}:00`); }
