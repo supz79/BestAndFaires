@@ -823,21 +823,28 @@ async function deleteMatch(matchId){
   const ok=confirm(`⚠️ ATTENZIONE\n\nStai per eliminare definitivamente la partita:\n${title}\n\nVerranno eliminati anche voti, statistiche, riepilogo e risultati collegati.\n\nL'operazione non può essere annullata.\n\nVuoi procedere?`);
   if(!ok)return;
   try{
+    // Usiamo un'unica operazione batch per evitare stati intermedi:
+    // partita e dati collegati vengono cancellati insieme.
+    const batch=db.batch();
+    const matchRef=db.collection('matches').doc(matchId);
     const subcollections=['votes','stats','summary','publicResults'];
+    let count=0;
     for(const sub of subcollections){
-      const snap=await db.collection('matches').doc(matchId).collection(sub).get();
-      const docs=snap.docs;
-      for(let i=0;i<docs.length;i+=450){
-        const batch=db.batch();
-        docs.slice(i,i+450).forEach(doc=>batch.delete(doc.ref));
-        await batch.commit();
-      }
+      const snap=await matchRef.collection(sub).get();
+      snap.docs.forEach(doc=>{batch.delete(doc.ref); count++;});
     }
-    await db.collection('matches').doc(matchId).delete();
+    batch.delete(matchRef);
+    await batch.commit();
     if(currentMatch?.id===matchId){currentMatch=null; lineup=[];}
     await loadMatches(); renderCalendar(); renderDashboard(); renderMatch();
-    setCalendarMessage('✅ Partita eliminata.',true);
-  }catch(err){console.error('Eliminazione partita:',err);alert(err.code==='permission-denied'?'❌ Firebase ha rifiutato l’eliminazione.':'❌ Impossibile eliminare la partita.');}
+    setCalendarMessage(`✅ Partita eliminata${count?` e ${count} dati collegati rimossi`:''}.`,true);
+  }catch(err){
+    console.error('Eliminazione partita:',err);
+    const detail=err?.code==='permission-denied'
+      ? 'Firebase ha rifiutato una delle operazioni di cancellazione. Le regole Firestore pubblicate potrebbero non essere allineate alla versione del progetto.'
+      : (err?.message||'Errore durante la cancellazione.');
+    alert(`❌ Eliminazione non completata.\n\n${detail}`);
+  }
 }
 
 function excelSerialToDate(value){
