@@ -426,7 +426,7 @@ $('#rosterList')?.addEventListener('change',async e=>{
 $('#lockBtn')?.addEventListener('click',async()=>{
   if(!isAdmin()||!currentMatch) return;
   if(matchHasStarted() && currentMatch.adminOverrideOpen!==true){
-    const ok=confirm('⚠️ ATTENZIONE\n\nLa partita è già iniziata. Sbloccare la distinta è un'operazione eccezionale e consente di modificarla dopo l'inizio della partita.\n\nVuoi procedere?');
+    const ok=confirm("⚠️ ATTENZIONE\n\nLa partita è già iniziata. Sbloccare la distinta è un'operazione eccezionale e consente di modificarla dopo l'inizio della partita.\n\nVuoi procedere?");
     if(!ok) return;
   }
   const next=matchHasStarted()?!currentMatch.adminOverrideOpen:!currentMatch.lineupLocked;
