@@ -126,10 +126,15 @@ async function loadMatches(){
     const activeNow=matches.filter(m=>{
       const d=parseDateTime(m);
       const eligible=!!meId && Array.isArray(m.lineup) && m.lineup.includes(meId);
-      const blocked=['cancelled','postponed'].includes(String(m.status||''));
-      // La votazione è indipendente dal risultato/stato amministrativo: anche
-      // una partita TERMINATA resta selezionabile finché la finestra di voto è aperta.
-      return !!d && Date.now()>=d.getTime() && eligible && !blocked && votingWindowOpen(m);
+      const status=String(m.status||'');
+      const blocked=['cancelled','postponed'].includes(status);
+      const started=!!d && Date.now()>=d.getTime();
+      // Il Player deve vedere come principale la partita attualmente IN CORSO,
+      // purché sia convocato. Una partita TERMINATA resta invece selezionabile
+      // solo durante la finestra di voto delle 6 ore.
+      const isLive = started && eligible && !blocked && ['in_progress','voting_open'].includes(status);
+      const isFinishedVoting = status==='finished' && eligible && votingWindowOpen(m);
+      return isLive || isFinishedVoting;
     });
     activeNow.sort((a,b)=>{
       const rank=s=>s==='voting_open'?0:(s==='in_progress'?1:(s==='finished'?0:2));
