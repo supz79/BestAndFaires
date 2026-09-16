@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.20.4 - A-06 Fix tabellino reload + progress polling */
+/* Best&Faires Beta.7.20.4 - A-07 Fix tabellino reload after login */
 
 let players = [];
 let matches = [];
@@ -9,6 +9,7 @@ let calendarDraft = [];
 let currentMatchStats = {};
 let currentMatchSummary = {};
 let statsRenderToken = 0;
+let matchStatsDraftDirty = false;
 let matchDetailsPromise = null;
 let matchDetailsFor = null;
 
@@ -18,6 +19,7 @@ let matchDetailsFor = null;
 function resetMatchViewCache(){
   currentMatchStats = {};
   currentMatchSummary = {};
+  matchStatsDraftDirty = false;
   matchDetailsPromise = null;
   matchDetailsFor = null;
   renderMatch._loadedStatsFor = null;
@@ -282,7 +284,11 @@ function renderMatchStats(){
   // Admin is typing the opponent score or player statistics.
   const preservedOpponentScore = canEdit ? document.querySelector('#opponentScore')?.value : undefined;
   const preservedStats = {};
-  if(canEdit){
+  // Preserva i valori DOM solo se l'Admin ha realmente iniziato una modifica.
+  // Altrimenti il primo render dopo login (prima che Firestore abbia terminato
+  // il caricamento) conterebbe come una bozza vuota e sovrascriverebbe a video
+  // gli stats appena caricati da Firebase.
+  if(canEdit && matchStatsDraftDirty){
     document.querySelectorAll('#matchStatsList .stats-row[data-stat-player]').forEach(row=>{
       const id=row.dataset.statPlayer;
       preservedStats[id]={
@@ -364,7 +370,7 @@ async function saveMatchStats(){
     const awayScore=localIsHome?opponentScore:localScore;
     batch.set(summaryRef,{homeScore,awayScore,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
     await batch.commit();
-    await loadMatchStats(currentMatch.id); await loadMatchSummary(currentMatch.id); renderMatchStats(); await renderPlayedMatches();
+    await loadMatchStats(currentMatch.id); await loadMatchSummary(currentMatch.id); matchStatsDraftDirty=false; renderMatchStats(); await renderPlayedMatches();
     const msg=$('#matchStatsMsg'); if(msg) msg.textContent='✅ Tabellino salvato.';
   }catch(e){
     console.error('Salvataggio statistiche:',e);
@@ -989,13 +995,18 @@ $('#matchEditStatus')?.addEventListener('change',e=>{
   setMatchEditorTimingLock(lockedByTime && e.target.value!=='postponed');
 });
 document.addEventListener('change',e=>{
-  if(!e.target.classList.contains('stat-appearance')) return;
-  const row=e.target.closest('.stats-row[data-stat-player]');
-  if(!row) return;
-  const enabled=e.target.checked;
-  row.querySelectorAll('.stat-goals,.stat-assists,.stat-yellow,.stat-red').forEach(input=>{ input.disabled=!enabled; });
-  const note=row.querySelector('.stats-note');
-  if(note) note.textContent=enabled?'Presenza registrata':'Non ancora registrato come presente';
+  if(e.target.matches('.stat-appearance')){
+    const row=e.target.closest('.stats-row[data-stat-player]');
+    if(!row) return;
+    matchStatsDraftDirty=true;
+    const enabled=e.target.checked;
+    row.querySelectorAll('.stat-goals,.stat-assists,.stat-yellow,.stat-red').forEach(input=>{ input.disabled=!enabled; });
+    const note=row.querySelector('.stats-note');
+    if(note) note.textContent=enabled?'Presenza registrata':'Non ancora registrato come presente';
+  }
+});
+document.addEventListener('input',e=>{
+  if(e.target.matches('.stat-goals,.stat-assists,.stat-yellow,.stat-red,#opponentScore')) matchStatsDraftDirty=true;
 });
 
 $('#saveMatchStatsBtn')?.addEventListener('click',saveMatchStats);
