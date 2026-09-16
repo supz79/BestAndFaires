@@ -301,10 +301,10 @@ function renderMatchStats(){
       return `<div class="stats-row" data-stat-player="${escapeHtml(id)}">
         <div><b>${escapeHtml(playerName(p))}</b><div class="stats-note">${played?'Presenza registrata':'Non ancora registrato come presente'}</div></div>
         <label title="Presenza">🏟️ <input class="stat-appearance" type="checkbox" ${played?'checked':''}></label>
-        <label title="Gol">⚽ <input class="stat-goals" type="number" min="0" step="1" value="${escapeHtml(goals)}"></label>
-        <label title="Assist">🎯 <input class="stat-assists" type="number" min="0" step="1" value="${escapeHtml(assists)}"></label>
-        <label title="Gialli">🟨 <input class="stat-yellow" type="number" min="0" step="1" value="${escapeHtml(yellow)}"></label>
-        <label title="Rossi">🟥 <input class="stat-red" type="number" min="0" step="1" value="${escapeHtml(red)}"></label>
+        <label title="Gol">⚽ <input class="stat-goals" type="number" min="0" step="1" value="${escapeHtml(goals)}" ${played?'':'disabled'}></label>
+        <label title="Assist">🎯 <input class="stat-assists" type="number" min="0" step="1" value="${escapeHtml(assists)}" ${played?'':'disabled'}></label>
+        <label title="Gialli">🟨 <input class="stat-yellow" type="number" min="0" step="1" value="${escapeHtml(yellow)}" ${played?'':'disabled'}></label>
+        <label title="Rossi">🟥 <input class="stat-red" type="number" min="0" step="1" value="${escapeHtml(red)}" ${played?'':'disabled'}></label>
       </div>`;
     }
     if(!played) return '';
@@ -954,6 +954,16 @@ $('#matchEditStatus')?.addEventListener('change',e=>{
   }
   setMatchEditorTimingLock(lockedByTime && e.target.value!=='postponed');
 });
+document.addEventListener('change',e=>{
+  if(!e.target.classList.contains('stat-appearance')) return;
+  const row=e.target.closest('.stats-row[data-stat-player]');
+  if(!row) return;
+  const enabled=e.target.checked;
+  row.querySelectorAll('.stat-goals,.stat-assists,.stat-yellow,.stat-red').forEach(input=>{ input.disabled=!enabled; });
+  const note=row.querySelector('.stats-note');
+  if(note) note.textContent=enabled?'Presenza registrata':'Non ancora registrato come presente';
+});
+
 $('#saveMatchStatsBtn')?.addEventListener('click',saveMatchStats);
 $('#newMatchBtn')?.addEventListener('click',()=>openMatchEditor());
 $('#cancelMatchEdit')?.addEventListener('click',closeMatchEditor); $('#closeMatchModal')?.addEventListener('click',closeMatchEditor);

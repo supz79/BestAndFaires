@@ -9,152 +9,29 @@ service cloud.firestore {
     function matchData(matchId) { return get(/databases/$(database)/documents/matches/$(matchId)).data; }
     function voteAfter(matchId) { return getAfter(/databases/$(database)/documents/matches/$(matchId)/votes/$(request.auth.uid)).data; }
     function voteBeforeExists(matchId) { return exists(/databases/$(database)/documents/matches/$(matchId)/votes/$(request.auth.uid)); }
-    function validPublicResultBase() {
-      return request.resource.data.keys().hasOnly(['points','first','second','third','votes'])
-        && request.resource.data.points is int
-        && request.resource.data.first is int
-        && request.resource.data.second is int
-        && request.resource.data.third is int
-        && request.resource.data.votes is int
-        && request.resource.data.points >= 0
-        && request.resource.data.first >= 0
-        && request.resource.data.second >= 0
-        && request.resource.data.third >= 0
-        && request.resource.data.votes >= 0;
-    }
-    function validStatBase() {
-      return request.resource.data.keys().hasOnly(['appearance','goals','assists','yellow','red'])
-        && request.resource.data.appearance is int
-        && request.resource.data.goals is int
-        && request.resource.data.assists is int
-        && request.resource.data.yellow is int
-        && request.resource.data.red is int
-        && request.resource.data.appearance == 1
-        && request.resource.data.goals >= 0
-        && request.resource.data.assists >= 0
-        && request.resource.data.yellow >= 0
-        && request.resource.data.red >= 0;
-    }
-
-    match /users/{id} {
-      allow get: if signedIn() && (request.auth.uid == id || admin());
-      allow list: if admin();
-      allow create: if signedIn() && request.auth.uid == id && request.resource.data.role == 'player' && request.resource.data.active == false && request.resource.data.playerId == null && request.resource.data.registrationStatus == 'pending';
-      allow update: if admin()
-        && (
-          // Prima dell'inizio la partita è modificabile normalmente.
-          !('scheduledStart' in resource.data)
-          || request.time < resource.data.scheduledStart
-
-          // Una partita TERMINATA è definitivamente congelata.
-          || (
-            resource.data.status != 'finished'
-            && request.resource.data.scheduledStart == resource.data.scheduledStart
-            && request.resource.data.lineup == resource.data.lineup
-            && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['status','finishedAt','adminOverrideOpen'])
-          )
-
-          // Durante lo sblocco eccezionale si può modificare solo la distinta
-          // e chiudere lo sblocco. Data/ora/squadre restano immutabili.
-          || (
-            resource.data.status != 'finished'
-            && resource.data.adminOverrideOpen == true
-            && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['lineup','adminOverrideOpen'])
-          )
-        );
-
+    function validPublicResultBase() { return request.resource.data.keys().hasOnly(['points','first','second','third','votes']) && request.resource.data.points is int && request.resource.data.first is int && request.resource.data.second is int && request.resource.data.third is int && request.resource.data.votes is int && request.resource.data.points >= 0 && request.resource.data.first >= 0 && request.resource.data.second >= 0 && request.resource.data.third >= 0 && request.resource.data.votes >= 0; }
+    function validStatBase() { return request.resource.data.keys().hasOnly(['appearance','goals','assists','yellow','red']) && request.resource.data.appearance is int && request.resource.data.goals is int && request.resource.data.assists is int && request.resource.data.yellow is int && request.resource.data.red is int && request.resource.data.appearance == 1 && request.resource.data.goals >= 0 && request.resource.data.assists >= 0 && request.resource.data.yellow >= 0 && request.resource.data.red >= 0; }
+    match /users/{id} { allow get: if signedIn() && (request.auth.uid == id || admin()); allow list: if admin(); allow create: if signedIn() && request.auth.uid == id && request.resource.data.role == 'player' && request.resource.data.active == false && request.resource.data.playerId == null && request.resource.data.registrationStatus == 'pending'; allow update: if admin(); allow delete: if false; }
+    match /leagues/{leagueId} { allow get, list: if signedIn() && (admin() || me().leagueId == leagueId); allow create: if admin(); allow update: if admin(); allow delete: if admin(); }
+    match /players/{playerId} { allow get, list: if signedIn() && (admin() || me().leagueId == resource.data.leagueId); allow create: if admin(); allow update: if admin(); allow delete: if admin(); }
+    match /matches/{matchId} {
+      allow get, list: if signedIn() && (admin() || me().leagueId == resource.data.leagueId);
+      allow create: if admin() && me().leagueId == request.resource.data.leagueId;
+      allow delete: if admin();
+      allow update: if admin() && me().leagueId == resource.data.leagueId && (
+        (!('scheduledStart' in resource.data) || request.time < resource.data.scheduledStart)
+        || (resource.data.status != 'finished' && request.resource.data.scheduledStart == resource.data.scheduledStart && request.resource.data.lineup == resource.data.lineup && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','finishedAt','adminOverrideOpen','updatedAt']))
+        || (resource.data.status != 'finished' && resource.data.adminOverrideOpen == true && request.resource.data.scheduledStart == resource.data.scheduledStart && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lineup','adminOverrideOpen','updatedAt']))
+        || (resource.data.status != 'finished' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['adminOverrideOpen','updatedAt']))
+      );
       match /votes/{voterUid} {
         allow get, list: if admin();
-        allow create: if player()
-          && request.auth.uid == voterUid
-          && matchData(matchId).status == 'finished'
-          && ('finishedAt' in matchData(matchId))
-          && request.time <= matchData(matchId).finishedAt + duration.value(6, 'h')
-          && me().playerId in matchData(matchId).lineup
-          && request.resource.data.keys().hasOnly(['ranking'])
-          && request.resource.data.ranking is list
-          && request.resource.data.ranking.size() == 3
-          && request.resource.data.ranking[0] is string
-          && request.resource.data.ranking[1] is string
-          && request.resource.data.ranking[2] is string
-          && request.resource.data.ranking[0] in matchData(matchId).lineup
-          && request.resource.data.ranking[1] in matchData(matchId).lineup
-          && request.resource.data.ranking[2] in matchData(matchId).lineup
-          && request.resource.data.ranking[0] != request.resource.data.ranking[1]
-          && request.resource.data.ranking[0] != request.resource.data.ranking[2]
-          && request.resource.data.ranking[1] != request.resource.data.ranking[2]
-          && request.resource.data.ranking[0] != me().playerId
-          && request.resource.data.ranking[1] != me().playerId
-          && request.resource.data.ranking[2] != me().playerId;
-        allow update: if false;
-        allow delete: if admin();
+        allow create: if player() && request.auth.uid == voterUid && matchData(matchId).status == 'finished' && ('finishedAt' in matchData(matchId)) && request.time <= matchData(matchId).finishedAt + duration.value(6, 'h') && me().playerId in matchData(matchId).lineup && request.resource.data.keys().hasOnly(['ranking']) && request.resource.data.ranking is list && request.resource.data.ranking.size() == 3 && request.resource.data.ranking[0] is string && request.resource.data.ranking[1] is string && request.resource.data.ranking[2] is string && request.resource.data.ranking[0] in matchData(matchId).lineup && request.resource.data.ranking[1] in matchData(matchId).lineup && request.resource.data.ranking[2] in matchData(matchId).lineup && request.resource.data.ranking[0] != request.resource.data.ranking[1] && request.resource.data.ranking[0] != request.resource.data.ranking[2] && request.resource.data.ranking[1] != request.resource.data.ranking[2] && request.resource.data.ranking[0] != me().playerId && request.resource.data.ranking[1] != me().playerId && request.resource.data.ranking[2] != me().playerId;
+        allow update: if false; allow delete: if admin();
       }
-
-      // Risultati aggregati pubblici: i Player possono leggerli, ma non possono
-      // modificare arbitrariamente la classifica. L'aggiornamento è ammesso solo
-      // nella stessa operazione atomica che crea il proprio voto.
-      match /stats/{playerId} {
-        // Le statistiche di partita sono visibili ai membri della stessa lega,
-        // mentre solo l'Admin può inserirle o modificarle.
-        allow get, list: if signedIn() && (admin() || me().leagueId == matchData(matchId).leagueId);
-        allow create, update: if admin()
-          && me().leagueId == matchData(matchId).leagueId
-          && playerId in matchData(matchId).lineup
-          && validStatBase();
-        allow delete: if admin();
-      }
-
-      match /summary/{summaryId} {
-        allow get, list: if signedIn()
-          && (admin() || me().leagueId == matchData(matchId).leagueId);
-
-        allow create, update: if admin()
-          && me().leagueId == matchData(matchId).leagueId
-          && request.resource.data.keys().hasOnly(['homeScore','awayScore','updatedAt'])
-          && request.resource.data.homeScore is int
-          && request.resource.data.awayScore is int
-          && request.resource.data.homeScore >= 0
-          && request.resource.data.awayScore >= 0;
-
-        allow delete: if admin();
-      }
-
-      match /publicResults/{playerId} {
-        allow get, list: if signedIn() && (admin() || me().leagueId == matchData(matchId).leagueId);
-
-        // L'Admin può ricostruire gli aggregati a partire dai voti segreti.
-        allow create, update: if admin();
-
-        // Il Player può aggiornare gli aggregati solo nella stessa operazione
-        // atomica che crea il proprio voto e solo con gli incrementi corretti.
-        allow create: if player()
-          && me().leagueId == matchData(matchId).leagueId
-          && !voteBeforeExists(matchId)
-          && voteAfter(matchId).ranking is list
-          && playerId in matchData(matchId).lineup
-          && validPublicResultBase()
-          && request.resource.data.points == (voteAfter(matchId).ranking[0] == playerId ? 3 : (voteAfter(matchId).ranking[1] == playerId ? 2 : (voteAfter(matchId).ranking[2] == playerId ? 1 : 0)))
-          && request.resource.data.first == (voteAfter(matchId).ranking[0] == playerId ? 1 : 0)
-          && request.resource.data.second == (voteAfter(matchId).ranking[1] == playerId ? 1 : 0)
-          && request.resource.data.third == (voteAfter(matchId).ranking[2] == playerId ? 1 : 0)
-          && request.resource.data.votes == ((playerId in voteAfter(matchId).ranking) ? 1 : 0);
-
-        allow update: if player()
-          && me().leagueId == matchData(matchId).leagueId
-          && !voteBeforeExists(matchId)
-          && voteAfter(matchId).ranking is list
-          && playerId in matchData(matchId).lineup
-          && validPublicResultBase()
-          && request.resource.data.points == resource.data.points + (voteAfter(matchId).ranking[0] == playerId ? 3 : (voteAfter(matchId).ranking[1] == playerId ? 2 : (voteAfter(matchId).ranking[2] == playerId ? 1 : 0)))
-          && request.resource.data.first == resource.data.first + (voteAfter(matchId).ranking[0] == playerId ? 1 : 0)
-          && request.resource.data.second == resource.data.second + (voteAfter(matchId).ranking[1] == playerId ? 1 : 0)
-          && request.resource.data.third == resource.data.third + (voteAfter(matchId).ranking[2] == playerId ? 1 : 0)
-          && request.resource.data.votes == resource.data.votes + ((playerId in voteAfter(matchId).ranking) ? 1 : 0);
-
-        allow delete: if admin();
-      }
+      match /stats/{playerId} { allow get, list: if signedIn() && (admin() || me().leagueId == matchData(matchId).leagueId); allow create, update: if admin() && me().leagueId == matchData(matchId).leagueId && playerId in matchData(matchId).lineup && validStatBase(); allow delete: if admin(); }
+      match /summary/{summaryId} { allow get, list: if signedIn() && (admin() || me().leagueId == matchData(matchId).leagueId); allow create, update: if admin() && me().leagueId == matchData(matchId).leagueId && request.resource.data.keys().hasOnly(['homeScore','awayScore','updatedAt']) && request.resource.data.homeScore is int && request.resource.data.awayScore is int && request.resource.data.homeScore >= 0 && request.resource.data.awayScore >= 0; allow delete: if admin(); }
+      match /publicResults/{playerId} { allow get, list: if signedIn() && (admin() || me().leagueId == matchData(matchId).leagueId); allow create, update: if admin(); allow create: if player() && me().leagueId == matchData(matchId).leagueId && !voteBeforeExists(matchId) && voteAfter(matchId).ranking is list && playerId in matchData(matchId).lineup && validPublicResultBase() && request.resource.data.points == (voteAfter(matchId).ranking[0] == playerId ? 3 : (voteAfter(matchId).ranking[1] == playerId ? 2 : (voteAfter(matchId).ranking[2] == playerId ? 1 : 0))) && request.resource.data.first == (voteAfter(matchId).ranking[0] == playerId ? 1 : 0) && request.resource.data.second == (voteAfter(matchId).ranking[1] == playerId ? 1 : 0) && request.resource.data.third == (voteAfter(matchId).ranking[2] == playerId ? 1 : 0) && request.resource.data.votes == ((playerId in voteAfter(matchId).ranking) ? 1 : 0); allow update: if player() && me().leagueId == matchData(matchId).leagueId && !voteBeforeExists(matchId) && voteAfter(matchId).ranking is list && playerId in matchData(matchId).lineup && validPublicResultBase() && request.resource.data.points == resource.data.points + (voteAfter(matchId).ranking[0] == playerId ? 3 : (voteAfter(matchId).ranking[1] == playerId ? 2 : (voteAfter(matchId).ranking[2] == playerId ? 1 : 0))) && request.resource.data.first == resource.data.first + (voteAfter(matchId).ranking[0] == playerId ? 1 : 0) && request.resource.data.second == resource.data.second + (voteAfter(matchId).ranking[1] == playerId ? 1 : 0) && request.resource.data.third == resource.data.third + (voteAfter(matchId).ranking[2] == playerId ? 1 : 0) && request.resource.data.votes == resource.data.votes + ((playerId in voteAfter(matchId).ranking) ? 1 : 0); allow delete: if admin(); }
     }
   }
 }
