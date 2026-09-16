@@ -539,8 +539,12 @@ async function loadOwnVoteState(){
   localVoted=false; if(!isPlayer()||!currentMatch) return;
   try{ const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).get(); localVoted=snap.exists; }catch(e){console.error(e);}
 }
+function playerHasMatchPresence(playerId){
+  const st=currentMatchStats?.[playerId];
+  return !!st && (st.appearance===1 || st.appearance===true);
+}
 function populateVotes(){
-  const me=currentPlayer(), eligible=players.filter(p=>lineup.includes(p.id)&&p.id!==me?.id);
+  const me=currentPlayer(), eligible=players.filter(p=>lineup.includes(p.id)&&playerHasMatchPresence(p.id)&&p.id!==me?.id);
 
   // Il timer aggiorna la schermata ogni secondo. Prima di ricostruire i
   // menu salviamo quindi le selezioni correnti, altrimenti il loro valore
@@ -558,13 +562,17 @@ function populateVotes(){
     if(selected[n] && eligible.some(p=>p.id===selected[n])) s.value=selected[n];
     s.disabled=localVoted;
   });
-  $('#submitVote').disabled=localVoted; $('#voteMsg').textContent=localVoted?'✅ Voto già registrato per questo account.':'';
+  $('#submitVote').disabled=localVoted || eligible.length<3;
+  if(localVoted) $('#voteMsg').textContent='✅ Voto già registrato per questo account.';
+  else if(eligible.length<3) $('#voteMsg').textContent='⚠️ Servono almeno 3 giocatori con Presenza registrata per poter votare.';
+  else $('#voteMsg').textContent='';
 }
 $('#submitVote')?.addEventListener('click',async()=>{
   if(!isPlayer()||!currentMatch||!votingWindowOpen(currentMatch)||!currentPlayerInLineup()||localVoted) return;
   const ranking=[1,2,3].map(n=>$('#vote'+n).value), me=currentPlayer();
   if(ranking.some(x=>!x)||new Set(ranking).size!==3) return alert('Seleziona tre giocatori diversi.');
   if(ranking.some(x=>!lineup.includes(x))) return alert('Puoi votare solo giocatori presenti in distinta.');
+  if(ranking.some(x=>!playerHasMatchPresence(x))) return alert('Puoi votare solo giocatori con Presenza registrata nel tabellino.');
   if(ranking.includes(me?.id)) return alert('Non puoi votare te stesso.');
   try{
     const matchRef=db.collection('matches').doc(currentMatch.id);
@@ -617,10 +625,19 @@ async function syncPublicResultsForAdmin(){
   if(!isAdmin()) return;
   try{
     for(const m of matches){
-      const votesSnap=await db.collection('matches').doc(m.id).collection('votes').get();
+      const [votesSnap, statsSnap]=await Promise.all([
+        db.collection('matches').doc(m.id).collection('votes').get(),
+        db.collection('matches').doc(m.id).collection('stats').get()
+      ]);
+      const presentIds=new Set();
+      statsSnap.forEach(doc=>{
+        const st=doc.data()||{};
+        if(st.appearance===1 || st.appearance===true) presentIds.add(doc.id);
+      });
       const totals={};
       votesSnap.forEach(doc=>{
         (doc.data().ranking||[]).forEach((id,i)=>{
+          if(!presentIds.has(id)) return;
           if(!totals[id]) totals[id]={points:0,first:0,second:0,third:0,votes:0};
           totals[id].points+=3-i;
           totals[id].votes++;
