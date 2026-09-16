@@ -736,7 +736,7 @@ function renderCalendar(){
   matches.forEach(m=>{const phase=String(m.fase||'').toLowerCase()==='ritorno'?'Ritorno':'Andata';grouped[phase].push(m);});
   const section=(name,arr)=>`<div class="calendar-group"><h3>${name}</h3>${arr.sort((a,b)=>(Number(a.giornata||a.day)||0)-(Number(b.giornata||b.day)||0)).map(m=>{
     const d=parseDateTime(m), title=`${m.homeTeam||leagueTeam()} vs ${m.awayTeam||m.opponent||''}`;
-    return `<div class="calendar-row"><div><b>G${escapeHtml(m.giornata||m.day||'')}</b><span>${escapeHtml(title)}</span><small>${formatDateTime(d)}</small></div><span class="pill ${statusClass(m.status)}">${statusLabel(m.status)}</span><div class="calendar-actions"><button class="small-btn stats-match" data-id="${escapeHtml(m.id)}">📊 Tabellino</button><button class="small-btn edit-match" data-id="${escapeHtml(m.id)}">✏️ Modifica</button></div></div>`;
+    return `<div class="calendar-row"><div><b>G${escapeHtml(m.giornata||m.day||'')}</b><span>${escapeHtml(title)}</span><small>${formatDateTime(d)}</small></div><span class="pill ${statusClass(m.status)}">${statusLabel(m.status)}</span><div class="calendar-actions"><button class="small-btn stats-match" data-id="${escapeHtml(m.id)}">📊 Tabellino</button><button class="small-btn edit-match" data-id="${escapeHtml(m.id)}">✏️ Modifica</button><button class="small-btn danger delete-match" data-id="${escapeHtml(m.id)}">🗑️ Elimina</button></div></div>`;
   }).join('')||'<p class="muted">Nessuna partita.</p>'}</div>`;
   box.innerHTML=section('Andata',grouped.Andata)+section('Ritorno',grouped.Ritorno);
 }
@@ -750,36 +750,94 @@ function openMatchEditor(match=null){
   $('#matchEditTime').value=d?`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`:'';
   $('#matchEditHome').value=match?.homeTeam||leagueTeam(); $('#matchEditAway').value=match?.awayTeam||'';
   $('#matchEditStatus').value=match?.status||'scheduled';
-  const started=matchHasStarted(match);
-  ['#matchEditRound','#matchEditPhase','#matchEditDate','#matchEditTime','#matchEditHome','#matchEditAway'].forEach(sel=>{const el=$(sel); if(el) el.disabled=started;});
+  const lockedByTime=!!match && String(match.status||'scheduled')!=='postponed' && matchHasStarted(match);
+  setMatchEditorTimingLock(lockedByTime);
   $('#matchModal').classList.remove('hidden');
+}
+function setMatchEditorTimingLock(locked){
+  ['#matchEditRound','#matchEditPhase','#matchEditDate','#matchEditTime','#matchEditHome','#matchEditAway'].forEach(sel=>{const el=$(sel); if(el) el.disabled=!!locked;});
 }
 function closeMatchEditor(){ $('#matchModal').classList.add('hidden'); }
 function buildScheduledStart(date,time){ return new Date(`${date}T${time}:00`); }
 async function saveMatchEditor(e){
   e.preventDefault(); if(!isAdmin())return;
-  const id=$('#matchEditId').value, date=$('#matchEditDate').value, time=$('#matchEditTime').value, home=$('#matchEditHome').value.trim(), away=$('#matchEditAway').value.trim();
+  const id=$('#matchEditId').value;
+  const old=id?matches.find(m=>m.id===id):null;
+  const selectedStatus=$('#matchEditStatus').value;
+  const lockedByTime=!!old && String(old.status||'scheduled')!=='postponed' && matchHasStarted(old);
+
+  // Una partita già iniziata non può essere trasformata in RINVIATA: il rinvio
+  // deve essere deciso prima dell'orario di inizio.
+  if(lockedByTime && selectedStatus==='postponed'){
+    alert('⚠️ La partita è già iniziata. Non è più possibile impostarla come RINVIATA.');
+    $('#matchEditStatus').value=old?.status||'scheduled';
+    return;
+  }
+
+  const round=String($('#matchEditRound').value).trim();
+  const phase=$('#matchEditPhase').value;
+  const home=$('#matchEditHome').value.trim();
+  const away=$('#matchEditAway').value.trim();
+  const date=$('#matchEditDate').value;
+  const time=$('#matchEditTime').value;
   if(!date||!time||!home||!away)return alert('Compila casa, trasferta, data e ora.');
-  const scheduledStart=buildScheduledStart(date,time), selectedStatus=$('#matchEditStatus').value, data={giornata:String($('#matchEditRound').value).trim(),day:String($('#matchEditRound').value).trim(),fase:$('#matchEditPhase').value,homeTeam:home,awayTeam:away,opponent:isLocalTeamName(home)?away:(isLocalTeamName(away)?home:away),isHome:isLocalTeamName(home),scheduledStart:firebase.firestore.Timestamp.fromDate(scheduledStart),date:formatDate(scheduledStart),time:time,status:selectedStatus};
+
+  // Dopo l'inizio, quando la partita non è RINVIATA, data/ora/squadre/fase/giornata
+  // restano quelle già registrate. Il timer è quindi la vera protezione.
+  const effectiveDate=lockedByTime ? (parseDateTime(old)?`${parseDateTime(old).getFullYear()}-${String(parseDateTime(old).getMonth()+1).padStart(2,'0')}-${String(parseDateTime(old).getDate()).padStart(2,'0')}`:date) : date;
+  const effectiveTime=lockedByTime ? (parseDateTime(old)?`${String(parseDateTime(old).getHours()).padStart(2,'0')}:${String(parseDateTime(old).getMinutes()).padStart(2,'0')}`:time) : time;
+  const effectiveRound=lockedByTime ? String(old.giornata||old.day||round) : round;
+  const effectivePhase=lockedByTime ? (String(old.fase||'Andata').toLowerCase()==='ritorno'?'Ritorno':'Andata') : phase;
+  const effectiveHome=lockedByTime ? String(old.homeTeam||leagueTeam()) : home;
+  const effectiveAway=lockedByTime ? String(old.awayTeam||old.opponent||'') : away;
+  const scheduledStart=buildScheduledStart(effectiveDate,effectiveTime);
+  const data={giornata:effectiveRound,day:effectiveRound,fase:effectivePhase,homeTeam:effectiveHome,awayTeam:effectiveAway,opponent:isLocalTeamName(effectiveHome)?effectiveAway:(isLocalTeamName(effectiveAway)?effectiveHome:effectiveAway),isHome:isLocalTeamName(effectiveHome),scheduledStart:firebase.firestore.Timestamp.fromDate(scheduledStart),date:formatDate(scheduledStart),time:effectiveTime,status:selectedStatus};
+
   if(selectedStatus==='finished') {
-    const old=matches.find(m=>m.id===id);
-    // Il timestamp di fine viene creato una sola volta, così un successivo
-    // salvataggio del risultato non prolunga accidentalmente le 6 ore di voto.
     if(!old || !old.finishedAt) data.finishedAt=firebase.firestore.FieldValue.serverTimestamp();
   } else if(id) data.finishedAt=firebase.firestore.FieldValue.delete();
+
+  // RINVIATA azzera completamente la distinta e la rende nuovamente preparabile.
+  if(selectedStatus==='postponed'){
+    data.lineup=[];
+    data.lineupLocked=false;
+    data.adminOverrideOpen=false;
+  }
+
   try{
     if(id){
-      const old=matches.find(m=>m.id===id);
-      // Dopo l'inizio resta modificabile lo stato e il riepilogo, mentre data/ora
-      // e distinta restano protette. Lo sblocco eccezionale continua a consentire
-      // modifiche alla distinta quando l'Admin lo attiva dall'app.
       await db.collection('matches').doc(id).update(data);
     }else{
-      data.leagueId=leagueId(); data.lineup=[]; data.lineupLocked=false; data.adminOverrideOpen=false; data.calendarKey=calendarKey({fase:data.fase,giornata:data.giornata,casa:home,trasferta:away});
+      data.leagueId=leagueId(); data.lineup=[]; data.lineupLocked=false; data.adminOverrideOpen=false; data.calendarKey=calendarKey({fase:data.fase,giornata:data.giornata,casa:effectiveHome,trasferta:effectiveAway});
       await db.collection('matches').add(data);
     }
     closeMatchEditor(); setCalendarMessage('✅ Partita salvata.',true); await loadMatches(); renderCalendar(); renderMatch();
-  }catch(err){console.error(err);alert(err.code==='permission-denied'?'❌ Firebase ha rifiutato la modifica. Dopo l’inizio restano bloccate data/ora e distinta, mentre stato e tabellino sono modificabili dall’Admin.':'❌ Impossibile salvare la partita.');}
+  }catch(err){console.error(err);alert(err.code==='permission-denied'?'❌ Firebase ha rifiutato la modifica. Dopo l’inizio restano bloccate data/ora e squadre, mentre lo stato resta gestibile secondo le regole della partita.':'❌ Impossibile salvare la partita.');}
+}
+
+async function deleteMatch(matchId){
+  if(!isAdmin()||!matchId)return;
+  const match=matches.find(m=>m.id===matchId);
+  if(!match)return;
+  const title=`${match.homeTeam||leagueTeam()} vs ${match.awayTeam||match.opponent||''}`;
+  const ok=confirm(`⚠️ ATTENZIONE\n\nStai per eliminare definitivamente la partita:\n${title}\n\nVerranno eliminati anche voti, statistiche, riepilogo e risultati collegati.\n\nL'operazione non può essere annullata.\n\nVuoi procedere?`);
+  if(!ok)return;
+  try{
+    const subcollections=['votes','stats','summary','publicResults'];
+    for(const sub of subcollections){
+      const snap=await db.collection('matches').doc(matchId).collection(sub).get();
+      const docs=snap.docs;
+      for(let i=0;i<docs.length;i+=450){
+        const batch=db.batch();
+        docs.slice(i,i+450).forEach(doc=>batch.delete(doc.ref));
+        await batch.commit();
+      }
+    }
+    await db.collection('matches').doc(matchId).delete();
+    if(currentMatch?.id===matchId){currentMatch=null; lineup=[];}
+    await loadMatches(); renderCalendar(); renderDashboard(); renderMatch();
+    setCalendarMessage('✅ Partita eliminata.',true);
+  }catch(err){console.error('Eliminazione partita:',err);alert(err.code==='permission-denied'?'❌ Firebase ha rifiutato l’eliminazione.':'❌ Impossibile eliminare la partita.');}
 }
 
 function excelSerialToDate(value){
@@ -874,7 +932,20 @@ async function commitImport(){
 $('#calendarList')?.addEventListener('click',e=>{
   const statsBtn=e.target.closest('.stats-match');
   if(statsBtn&&isAdmin()){ const m=matches.find(x=>x.id===statsBtn.dataset.id); if(m){ currentMatch=m; lineup=Array.isArray(m.lineup)?[...m.lineup]:[]; renderMatch(); show('match'); } return; }
+  const deleteBtn=e.target.closest('.delete-match');
+  if(deleteBtn&&isAdmin()){ deleteMatch(deleteBtn.dataset.id); return; }
   const b=e.target.closest('.edit-match'); if(b){const m=matches.find(x=>x.id===b.dataset.id);openMatchEditor(m);}
+});
+$('#matchEditStatus')?.addEventListener('change',e=>{
+  const id=$('#matchEditId').value;
+  const m=id?matches.find(x=>x.id===id):null;
+  const lockedByTime=!!m && String(m.status||'scheduled')!=='postponed' && matchHasStarted(m);
+  if(lockedByTime && e.target.value==='postponed'){
+    e.target.value=m.status||'scheduled';
+    alert("⚠️ Il rinvio deve essere impostato prima dell'orario di inizio della partita.");
+    return;
+  }
+  setMatchEditorTimingLock(lockedByTime && e.target.value!=='postponed');
 });
 $('#saveMatchStatsBtn')?.addEventListener('click',saveMatchStats);
 $('#newMatchBtn')?.addEventListener('click',()=>openMatchEditor());
