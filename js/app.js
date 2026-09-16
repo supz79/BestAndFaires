@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.20.4 - A-08 Fix auth timing + tabellino reload */
+/* Best&Faires Beta.7.20.4 - A-09 Finalizzazione tabellino */
 
 let players = [];
 let matches = [];
@@ -10,6 +10,7 @@ let currentMatchStats = {};
 let currentMatchSummary = {};
 let statsRenderToken = 0;
 let matchStatsDraftDirty = false;
+let matchStatsExceptionOpen = false;
 let matchDetailsPromise = null;
 let matchDetailsFor = null;
 let voteProgressTimer = null;
@@ -21,6 +22,7 @@ function resetMatchViewCache(){
   currentMatchStats = {};
   currentMatchSummary = {};
   matchStatsDraftDirty = false;
+  matchStatsExceptionOpen = false;
   matchDetailsPromise = null;
   matchDetailsFor = null;
   currentMatch = null;
@@ -39,6 +41,7 @@ function isPlayer(){ return window.currentUserData?.role === 'player'; }
 function uid(){ return firebase.auth().currentUser?.uid || ''; }
 function leagueId(){ return window.currentUserData?.leagueId || 'demo'; }
 function leagueTeam(){ return window.currentLeagueData?.teamName || 'Squadra'; }
+function localTeam(){ return leagueTeam(); }
 
 function escapeHtml(value='') {
   return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -314,79 +317,77 @@ async function loadCurrentMatchDetails(matchId=currentMatch?.id){
 }
 function statNum(v){ const n=Number(v); return Number.isFinite(n)&&n>=0?Math.floor(n):0; }
 function renderMatchStats(){
-  const card=$('#matchStatsCard'), box=$('#matchStatsList');
+  const card=$('#matchStatsCard'), box=$('#matchStatsList'), resultBox=$('#matchResultEditor');
+  const saveBtn=$('#saveMatchStatsBtn'), msg=$('#matchStatsMsg');
+  const finalizeBtn=$('#finalizeMatchStatsBtn'), exceptionalBtn=$('#exceptionalEditStatsBtn');
   if(!card||!box||!currentMatch) return;
-  const canEdit=isAdmin();
-  const saveBtn=$('#saveMatchStatsBtn'), msg=$('#matchStatsMsg'), resultBox=$('#matchResultEditor');
-  // Preserve unsaved values because renderMatch() is refreshed every second
-  // by the vote timer. Rebuilding the form must not reset inputs while the
-  // Admin is typing the opponent score or player statistics.
-  const preservedOpponentScore = canEdit ? document.querySelector('#opponentScore')?.value : undefined;
-  const preservedStats = {};
-  // Preserva i valori DOM solo se l'Admin ha realmente iniziato una modifica.
-  // Altrimenti il primo render dopo login (prima che Firestore abbia terminato
-  // il caricamento) conterebbe come una bozza vuota e sovrascriverebbe a video
-  // gli stats appena caricati da Firebase.
-  if(canEdit && matchStatsDraftDirty){
-    document.querySelectorAll('#matchStatsList .stats-row[data-stat-player]').forEach(row=>{
-      const id=row.dataset.statPlayer;
-      preservedStats[id]={
-        appearance: !!row.querySelector('.stat-appearance')?.checked,
-        goals: row.querySelector('.stat-goals')?.value ?? '',
-        assists: row.querySelector('.stat-assists')?.value ?? '',
-        yellow: row.querySelector('.stat-yellow')?.value ?? '',
-        red: row.querySelector('.stat-red')?.value ?? ''
-      };
-    });
-  }
-  if(saveBtn) saveBtn.closest('.modal-actions')?.classList.toggle('hidden',!canEdit);
-  if(msg) msg.classList.toggle('hidden',!canEdit);
+  const canEditBase=isAdmin() && String(currentMatch.status||'')!=='cancelled';
+  const finalized=currentMatch.tabellinoFinalizzato===true;
+  const exceptionalOpen=matchStatsExceptionOpen===true;
+  const canEdit=canEditBase && (!finalized || exceptionalOpen);
+  const isFinished=String(currentMatch.status||'')==='finished';
+
+  // Il tabellino deve restare visibile all'Admin anche quando non ci sono ancora stats,
+  // mentre al Player mostriamo la lettura solo quando esistono dati.
+  card.classList.toggle('hidden',!canEdit && !Object.keys(currentMatchStats).length && !Object.keys(currentMatchSummary).length);
+
   if(resultBox){
-    const home=currentMatch.homeTeam||leagueTeam(), away=currentMatch.awayTeam||currentMatch.opponent||'Avversario';
+    const localIsHome=isLocalTeamName(currentMatch.homeTeam||leagueTeam());
+    const opponentTeam=localIsHome?(currentMatch.awayTeam||currentMatch.opponent||'Avversario'):(currentMatch.homeTeam||leagueTeam());
+    const localGoals=Object.values(currentMatchStats||{}).reduce((sum,st)=>sum + (statNum(st?.appearance) ? statNum(st?.goals) : 0),0);
+    const opponentScore=Number.isFinite(Number(currentMatchSummary?.[localIsHome?'awayScore':'homeScore'])) ? Number(currentMatchSummary?.[localIsHome?'awayScore':'homeScore']) : 0;
     if(canEdit){
-      const localIsHome=isLocalTeamName(home);
-      const localTeam=localIsHome?home:away;
-      const opponentTeam=localIsHome?away:home;
-      const savedLocalGoals=Object.values(currentMatchStats||{}).reduce((sum,st)=>sum+statNum(st.goals),0);
-      const localGoals=Object.values(preservedStats).reduce((sum,st)=>sum+statNum(st.goals),0) || (Object.keys(preservedStats).length ? 0 : savedLocalGoals);
-      const opponentScoreSaved=localIsHome?statNum(currentMatchSummary.awayScore):statNum(currentMatchSummary.homeScore);
-      const opponentScore=preservedOpponentScore !== undefined ? preservedOpponentScore : opponentScoreSaved;
-      resultBox.innerHTML=`<div class="result-editor-title">🏟️ Risultato partita</div><div class="result-inputs"><div class="result-auto-score"><span class="result-team">${escapeHtml(localTeam)}</span><strong id="localScoreDisplay">${localGoals}</strong><small>gol nel tabellino</small></div><span>−</span><label>${escapeHtml(opponentTeam)}<input id="opponentScore" type="number" min="0" step="1" value="${escapeHtml(String(opponentScore))}"></label></div>`;
-    }else resultBox.innerHTML='';
+      resultBox.innerHTML=`<div class="result-editor-title">🏟️ Risultato partita</div><div class="result-inputs"><div class="result-auto-score"><span class="result-team">${escapeHtml(localTeam())}</span><strong id="localScoreDisplay">${localGoals}</strong><small>gol nel tabellino</small></div><span>−</span><label>${escapeHtml(opponentTeam)}<input id="opponentScore" type="number" min="0" step="1" value="${escapeHtml(String(opponentScore))}"></label></div>`;
+    }else{
+      resultBox.innerHTML=`<div class="result-editor-title">🏟️ Risultato partita</div><div class="result-readonly"><span>${escapeHtml(localIsHome?(currentMatch.homeTeam||leagueTeam()):(currentMatch.awayTeam||currentMatch.opponent||'Avversario'))}</span><strong>${Number(currentMatchSummary?.homeScore??0)} - ${Number(currentMatchSummary?.awayScore??0)}</strong><span>${escapeHtml(localIsHome?(currentMatch.awayTeam||currentMatch.opponent||'Avversario'):(currentMatch.homeTeam||leagueTeam()))}</span></div>`;
+    }
   }
+
   const ids=Array.isArray(currentMatch.lineup)?currentMatch.lineup:[];
-  if(!ids.length){ card.classList.toggle('hidden',!canEdit); box.innerHTML='<p class="muted">Nessun giocatore in distinta.</p>'; return; }
   const rows=ids.map(id=>{
-    const p=players.find(x=>x.id===id); if(!p) return '';
-    const st=currentMatchStats[id]||{};
-    const draft=preservedStats[id];
-    const played=draft ? draft.appearance : (st.appearance===1 || st.appearance===true);
+    const p=players.find(x=>x.id===id)||{id}; const st=currentMatchStats[id]||{}; const played=st.appearance===1||st.appearance===true;
     if(canEdit){
-      const goals=draft ? draft.goals : String(statNum(st.goals));
-      const assists=draft ? draft.assists : String(statNum(st.assists));
-      const yellow=draft ? draft.yellow : String(statNum(st.yellow));
-      const red=draft ? draft.red : String(statNum(st.red));
       return `<div class="stats-row" data-stat-player="${escapeHtml(id)}">
         <div><b>${escapeHtml(playerName(p))}</b><div class="stats-note">${played?'Presenza registrata':'Non ancora registrato come presente'}</div></div>
-        <label title="Presenza">🏟️ <input class="stat-appearance" type="checkbox" ${played?'checked':''}></label>
-        <label title="Gol">⚽ <input class="stat-goals" type="number" min="0" step="1" value="${escapeHtml(goals)}" ${played?'':'disabled'}></label>
-        <label title="Assist">🎯 <input class="stat-assists" type="number" min="0" step="1" value="${escapeHtml(assists)}" ${played?'':'disabled'}></label>
-        <label title="Gialli">🟨 <input class="stat-yellow" type="number" min="0" step="1" value="${escapeHtml(yellow)}" ${played?'':'disabled'}></label>
-        <label title="Rossi">🟥 <input class="stat-red" type="number" min="0" step="1" value="${escapeHtml(red)}" ${played?'':'disabled'}></label>
+        <label class="inline-check"><input class="stat-appearance" type="checkbox" ${played?'checked':''}> Pres.</label>
+        <input class="stat-goals" type="number" min="0" step="1" value="${statNum(st.goals)}" ${played?'':'disabled'}>
+        <input class="stat-assists" type="number" min="0" step="1" value="${statNum(st.assists)}" ${played?'':'disabled'}>
+        <input class="stat-yellow" type="number" min="0" step="1" value="${statNum(st.yellow)}" ${played?'':'disabled'}>
+        <input class="stat-red" type="number" min="0" step="1" value="${statNum(st.red)}" ${played?'':'disabled'}>
       </div>`;
     }
-    if(!played) return '';
+    if(!played && !Object.keys(currentMatchStats).length) return '';
     return `<div class="stats-row stats-readonly" data-stat-player="${escapeHtml(id)}"><div><b>${escapeHtml(playerName(p))}</b></div><span>⚽ ${statNum(st.goals)}</span><span>🎯 ${statNum(st.assists)}</span><span>🟨 ${statNum(st.yellow)}</span><span>🟥 ${statNum(st.red)}</span></div>`;
   }).join('');
-  card.classList.toggle('hidden',!canEdit && !Object.keys(currentMatchStats).length);
+
   if(canEdit){
     box.innerHTML=`<div class="stats-grid stats-header"><span>Giocatore</span><span>Pres.</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span></div>${rows||'<p class="muted">Nessun giocatore.</p>'}`;
   }else{
     box.innerHTML=`<div class="stats-row stats-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}`;
   }
+
+  if(msg){
+    if(finalized && !exceptionalOpen){ msg.textContent='🔒 Tabellino finalizzato e protetto. Clicca “Modifica eccezionale” per una correzione amministrativa.'; msg.className='muted'; }
+    else if(exceptionalOpen){ msg.textContent='⚠️ Modifica eccezionale attiva. Salva la correzione per richiudere il tabellino.'; msg.className='warning'; }
+    else { msg.textContent=''; msg.className='success'; }
+  }
+  if(saveBtn){
+    const showSave=canEdit;
+    saveBtn.style.display=showSave?'':'none';
+    saveBtn.textContent=exceptionalOpen?'💾 Salva correzione':'💾 Salva tabellino';
+  }
+  if(finalizeBtn){
+    const already=finalized;
+    finalizeBtn.style.display=(isAdmin()&&isFinished&&!already&&!exceptionalOpen)?'':'none';
+    finalizeBtn.disabled=!(isFinished&&Object.keys(currentMatchSummary).length>0);
+  }
+  if(exceptionalBtn){
+    exceptionalBtn.style.display=(isAdmin()&&isFinished&&finalized&&!exceptionalOpen)?'':'none';
+  }
 }
 async function saveMatchStats(){
   if(!isAdmin()||!currentMatch) return;
+  if(currentMatch.tabellinoFinalizzato===true && !matchStatsExceptionOpen) return; 
   const btn=$('#saveMatchStatsBtn'), rows=[...document.querySelectorAll('#matchStatsList .stats-row[data-stat-player]')];
   if(btn){btn.disabled=true;btn.textContent='⏳ Salvataggio...';}
   try{
@@ -409,13 +410,41 @@ async function saveMatchStats(){
     const awayScore=localIsHome?opponentScore:localScore;
     batch.set(summaryRef,{homeScore,awayScore,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
     await batch.commit();
-    await loadCurrentMatchDetails(currentMatch.id); matchStatsDraftDirty=false; renderMatchStats(); await renderPlayedMatches();
-    const msg=$('#matchStatsMsg'); if(msg) msg.textContent='✅ Tabellino salvato.';
+    await loadCurrentMatchDetails(currentMatch.id); matchStatsDraftDirty=false; matchStatsExceptionOpen=false; renderMatchStats(); await renderPlayedMatches();
+    const msg=$('#matchStatsMsg'); if(msg){ msg.textContent='✅ Tabellino salvato.'; msg.className='success'; }
   }catch(e){
     console.error('Salvataggio statistiche:',e);
     alert(e.code==='permission-denied'?'❌ Firebase ha rifiutato il salvataggio del tabellino.':'❌ Impossibile salvare il tabellino.');
   }finally{ if(btn){btn.disabled=false;btn.textContent='💾 Salva tabellino';} }
 }
+async function finalizeMatchStats(){
+  if(!isAdmin()||!currentMatch||String(currentMatch.status||'')!=='finished') return;
+  if(currentMatch.tabellinoFinalizzato===true) return;
+  if(!Object.keys(currentMatchSummary).length){
+    alert('⚠️ Prima salva il tabellino con il risultato della partita.');
+    return;
+  }
+  const ok=confirm('✅ FINALIZZA TABELLINO\n\nDopo la finalizzazione il tabellino diventerà in sola lettura.\n\nPer correggerlo in seguito sarà necessario usare “Modifica eccezionale”.\n\nVuoi finalizzare il tabellino?');
+  if(!ok) return;
+  const btn=$('#finalizeMatchStatsBtn'); if(btn){btn.disabled=true;btn.textContent='⏳ Finalizzazione...';}
+  try{
+    await db.collection('matches').doc(currentMatch.id).update({tabellinoFinalizzato:true,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    currentMatch.tabellinoFinalizzato=true;
+    matchStatsExceptionOpen=false;
+    renderMatchStats();
+  }catch(e){
+    console.error('Finalizzazione tabellino:',e);
+    alert(e.code==='permission-denied'?'❌ Firebase ha rifiutato la finalizzazione. Verifica le Rules.':'❌ Impossibile finalizzare il tabellino.');
+  }finally{ if(btn){btn.disabled=false;btn.textContent='✅ Finalizza tabellino';} }
+}
+function openExceptionalStatsEdit(){
+  if(!isAdmin()||!currentMatch||currentMatch.tabellinoFinalizzato!==true||String(currentMatch.status||'')!=='finished') return;
+  const ok=confirm('⚠️ MODIFICA ECCEZIONALE\n\nStai per aprire temporaneamente un tabellino già finalizzato.\nLa partita resterà TERMINATA e la distinta resterà bloccata.\n\nVuoi procedere?');
+  if(!ok) return;
+  matchStatsExceptionOpen=true;
+  renderMatchStats();
+}
+
 async function loadSeasonStats(){
   const totals=Object.fromEntries(players.map(p=>[p.id,{...p,appearances:0,goals:0,assists:0,yellow:0,red:0}]));
   try{
@@ -1037,6 +1066,8 @@ document.addEventListener('input',e=>{
 });
 
 $('#saveMatchStatsBtn')?.addEventListener('click',saveMatchStats);
+$('#finalizeMatchStatsBtn')?.addEventListener('click',finalizeMatchStats);
+$('#exceptionalEditStatsBtn')?.addEventListener('click',openExceptionalStatsEdit);
 $('#newMatchBtn')?.addEventListener('click',()=>openMatchEditor());
 $('#cancelMatchEdit')?.addEventListener('click',closeMatchEditor); $('#closeMatchModal')?.addEventListener('click',closeMatchEditor);
 $('#matchEditForm')?.addEventListener('submit',saveMatchEditor);

@@ -23,6 +23,7 @@ service cloud.firestore {
         || (resource.data.status != 'finished' && request.resource.data.scheduledStart == resource.data.scheduledStart && request.resource.data.lineup == resource.data.lineup && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','finishedAt','adminOverrideOpen','updatedAt']))
         || (resource.data.status != 'finished' && resource.data.adminOverrideOpen == true && request.resource.data.scheduledStart == resource.data.scheduledStart && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lineup','adminOverrideOpen','updatedAt']))
         || (resource.data.status != 'finished' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['adminOverrideOpen','updatedAt']))
+        || (resource.data.status == 'finished' && request.resource.data.tabellinoFinalizzato == true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tabellinoFinalizzato','updatedAt']))
       );
       match /votes/{voterUid} {
         allow get, list: if admin();
