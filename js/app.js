@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.20.4 - A-09 Finalizzazione tabellino */
+/* Best&Faires Beta.7.20.4 - A-11 Finestra voto 6h */
 
 let players = [];
 let matches = [];
@@ -1102,10 +1102,50 @@ $('#dashboardMatchCard')?.addEventListener('click',()=>{ if(currentMatch) show('
 $('#dashboardMatchCard')?.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&currentMatch){e.preventDefault();show('match');} });
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');renderRanking();});
 let voteTimer=null;
-function startVoteTimer(){
+let expiredVoteMatchHandled=null;
+function updateVoteWindowUI(){
+  if(!currentMatch) return;
+  const open=votingWindowOpen(currentMatch);
+  const started=matchHasStarted(currentMatch);
+  const timer=$('#voteTimer');
+  if(timer){
+    if(isPlayer() && open){
+      timer.textContent=`⏱️ Tempo per votare: ${formatCountdown(votingRemainingMs(currentMatch))}`;
+      timer.className='pill open';
+    }else if(isPlayer() && started){
+      timer.textContent='⏱️ Finestra di voto terminata';
+      timer.className='pill closed';
+    }else if(!started){
+      timer.textContent='⏱️ Il voto sarà disponibile dopo l’inizio della partita';
+      timer.className='pill';
+    }
+  }
+  renderDashboard();
+}
+async function startVoteTimer(){
   if(voteTimer) clearInterval(voteTimer);
-  voteTimer=setInterval(()=>{
-    if(currentMatch){ renderDashboard(); }
+  expiredVoteMatchHandled=null;
+  voteTimer=setInterval(async()=>{
+    if(!currentMatch) return;
+    updateVoteWindowUI();
+
+    // Quando scadono le 6 ore della partita TERMINATA, ricalcoliamo una sola volta
+    // la partita corrente. In questo modo la Home può passare alla prossima senza
+    // scrivere nulla su Firebase e senza generare query ripetute ogni secondo.
+    if(String(currentMatch.status||'')==='finished' && !votingWindowOpen(currentMatch) && expiredVoteMatchHandled!==currentMatch.id){
+      expiredVoteMatchHandled=currentMatch.id;
+      const expiredId=currentMatch.id;
+      try{
+        await loadMatches();
+        // Se nel frattempo la selezione corrente è cambiata, aggiorniamo subito la UI.
+        if(currentMatch?.id!==expiredId){
+          await loadCurrentMatchDetails(currentMatch.id);
+          await loadOwnVoteState();
+        }
+        renderDashboard();
+        renderMatch();
+      }catch(e){ console.error('Aggiornamento partita dopo scadenza voti:',e); }
+    }
   },1000);
   if(voteProgressTimer) clearInterval(voteProgressTimer);
   voteProgressTimer=setInterval(()=>{ if(currentMatch && isAdmin()) updateProgress(); },5000);
