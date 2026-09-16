@@ -58,8 +58,8 @@ function matchEndDate(m=currentMatch){
 }
 function votingDeadlineDate(m=currentMatch){ const end=matchEndDate(m); return end ? new Date(end.getTime()+6*60*60*1000) : null; }
 function votingWindowOpen(m=currentMatch){
-  if(!m || !matchHasStarted(m)) return false;
-  const blocked=['cancelled','postponed']; if(blocked.includes(String(m.status||''))) return false;
+  if(!m || String(m.status||'')!=='finished') return false;
+  if(!m.finishedAt) return false;
   const deadline=votingDeadlineDate(m);
   return !!deadline && Date.now() <= deadline.getTime();
 }
@@ -67,6 +67,7 @@ function votingRemainingMs(m=currentMatch){ const d=votingDeadlineDate(m); retur
 function formatCountdown(ms){ const total=Math.floor(Math.max(0,ms)/1000); const days=Math.floor(total/86400); const h=Math.floor(total%86400/3600); const min=Math.floor(total%3600/60); const sec=total%60; return `${days}g ${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
 function isLineupLocked(){
   if (!currentMatch) return true;
+  if (String(currentMatch.status||'')==='finished') return true;
   if (currentMatch.adminOverrideOpen === true) return false;
   if (matchHasStarted()) return true;
   return currentMatch.lineupLocked === true;
@@ -122,19 +123,16 @@ async function loadMatches(){
     const activeNow = matches.filter(m=>{
       const d=parseDateTime(m);
       const status=String(m.status||'');
-      const explicitlyInProgress=status==='in_progress' || status==='voting_open';
       const startedByTime=!!d && Date.now()>=d.getTime();
-      return (explicitlyInProgress || startedByTime) && !['finished','cancelled','postponed'].includes(status);
+      return startedByTime && !['finished','cancelled','postponed'].includes(status);
     });
-    activeNow.sort((a,b)=>{
-      const rank=s=>s==='voting_open'?0:(s==='in_progress'?1:2);
-      return rank(a.status)-rank(b.status) || (parseDateTime(b)?.getTime()||0)-(parseDateTime(a)?.getTime()||0);
-    });
+    activeNow.sort((a,b)=>(parseDateTime(b)?.getTime()||0)-(parseDateTime(a)?.getTime()||0));
+    const votingFinished = matches.filter(m=>votingWindowOpen(m));
     const future=matches.filter(m=>{
       const d=parseDateTime(m);
       return !!d && d.getTime()>Date.now() && !['finished','cancelled','postponed'].includes(String(m.status||''));
     });
-    currentMatch=activeNow[0] || future[0] || matches[0] || null;
+    currentMatch=votingFinished.sort((a,b)=>(b.finishedAt?.toDate?.()?.getTime?.()||0)-(a.finishedAt?.toDate?.()?.getTime?.()||0))[0] || activeNow[0] || future[0] || matches[0] || null;
   }
   lineup = currentMatch && Array.isArray(currentMatch.lineup) ? [...currentMatch.lineup] : [];
 }
@@ -393,15 +391,21 @@ function renderMatch(){
   }).join('');
   const lockBtn=$('#lockBtn');
   if(isAdmin()){
-    lockBtn.style.display='';
-    if(matchHasStarted()) lockBtn.textContent=currentMatch.adminOverrideOpen?'🔒 Chiudi modifica eccezionale':'🔓 Sblocca distinta (eccezione Admin)';
-    else lockBtn.textContent=currentMatch.lineupLocked?'🔓 Sblocca distinta':'🔒 Blocca distinta';
+    if(String(currentMatch.status||'')==='finished'){
+      lockBtn.style.display='none';
+    }else{
+      lockBtn.style.display='';
+      if(matchHasStarted()) lockBtn.textContent=currentMatch.adminOverrideOpen?'🔒 Chiudi modifica eccezionale':'🔓 Sblocca distinta (eccezione Admin)';
+      else lockBtn.textContent=currentMatch.lineupLocked?'🔓 Sblocca distinta':'🔒 Blocca distinta';
+    }
   }else lockBtn.style.display='none';
   const status=$('#matchLockStatus');
   if(status){
-    if(matchHasStarted()){
+    if(String(currentMatch.status||'')==='finished'){
       const deadline=votingDeadlineDate(currentMatch);
-      status.textContent=(currentMatch.adminOverrideOpen?'⚠️ Sblocco eccezionale Admin attivo. ':'🔒 Distinta bloccata automaticamente all’inizio della partita. ')+(deadline?`⏱️ Votazione disponibile fino al ${formatDateTime(deadline)}.`:'');
+      status.textContent='🔒 Distinta definitivamente bloccata. ' + (deadline ? `⏱️ Votazione disponibile fino al ${formatDateTime(deadline)}.` : '');
+    } else if(matchHasStarted()){
+      status.textContent=(currentMatch.adminOverrideOpen?'⚠️ Sblocco eccezionale Admin attivo. ':'🔒 Distinta bloccata automaticamente all’inizio della partita.');
     } else status.textContent='🕒 Distinta modificabile fino all’inizio della partita.';
   }
   const canVote=isPlayer()&&votingWindowOpen(currentMatch)&&currentPlayerInLineup();
@@ -425,6 +429,7 @@ $('#rosterList')?.addEventListener('change',async e=>{
 });
 $('#lockBtn')?.addEventListener('click',async()=>{
   if(!isAdmin()||!currentMatch) return;
+  if(String(currentMatch.status||'')==='finished') return;
   if(matchHasStarted() && currentMatch.adminOverrideOpen!==true){
     const ok=confirm("⚠️ ATTENZIONE\n\nLa partita è già iniziata. Sbloccare la distinta è un'operazione eccezionale e consente di modificarla dopo l'inizio della partita.\n\nVuoi procedere?");
     if(!ok) return;
@@ -795,7 +800,9 @@ async function saveMatchEditor(e){
 
   if(selectedStatus==='finished') {
     if(!old || !old.finishedAt) data.finishedAt=firebase.firestore.FieldValue.serverTimestamp();
-  } else if(id) data.finishedAt=firebase.firestore.FieldValue.delete();
+  } else if(id && String(old?.status||'')!=='finished') {
+    data.finishedAt=firebase.firestore.FieldValue.delete();
+  }
 
   // RINVIATA azzera completamente la distinta e la rende nuovamente preparabile.
   if(selectedStatus==='postponed'){
@@ -823,28 +830,21 @@ async function deleteMatch(matchId){
   const ok=confirm(`⚠️ ATTENZIONE\n\nStai per eliminare definitivamente la partita:\n${title}\n\nVerranno eliminati anche voti, statistiche, riepilogo e risultati collegati.\n\nL'operazione non può essere annullata.\n\nVuoi procedere?`);
   if(!ok)return;
   try{
-    // Usiamo un'unica operazione batch per evitare stati intermedi:
-    // partita e dati collegati vengono cancellati insieme.
-    const batch=db.batch();
-    const matchRef=db.collection('matches').doc(matchId);
     const subcollections=['votes','stats','summary','publicResults'];
-    let count=0;
     for(const sub of subcollections){
-      const snap=await matchRef.collection(sub).get();
-      snap.docs.forEach(doc=>{batch.delete(doc.ref); count++;});
+      const snap=await db.collection('matches').doc(matchId).collection(sub).get();
+      const docs=snap.docs;
+      for(let i=0;i<docs.length;i+=450){
+        const batch=db.batch();
+        docs.slice(i,i+450).forEach(doc=>batch.delete(doc.ref));
+        await batch.commit();
+      }
     }
-    batch.delete(matchRef);
-    await batch.commit();
+    await db.collection('matches').doc(matchId).delete();
     if(currentMatch?.id===matchId){currentMatch=null; lineup=[];}
     await loadMatches(); renderCalendar(); renderDashboard(); renderMatch();
-    setCalendarMessage(`✅ Partita eliminata${count?` e ${count} dati collegati rimossi`:''}.`,true);
-  }catch(err){
-    console.error('Eliminazione partita:',err);
-    const detail=err?.code==='permission-denied'
-      ? 'Firebase ha rifiutato una delle operazioni di cancellazione. Le regole Firestore pubblicate potrebbero non essere allineate alla versione del progetto.'
-      : (err?.message||'Errore durante la cancellazione.');
-    alert(`❌ Eliminazione non completata.\n\n${detail}`);
-  }
+    setCalendarMessage('✅ Partita eliminata.',true);
+  }catch(err){console.error('Eliminazione partita:',err);alert(err.code==='permission-denied'?'❌ Firebase ha rifiutato l’eliminazione.':'❌ Impossibile eliminare la partita.');}
 }
 
 function excelSerialToDate(value){

@@ -40,57 +40,38 @@ service cloud.firestore {
       allow get: if signedIn() && (request.auth.uid == id || admin());
       allow list: if admin();
       allow create: if signedIn() && request.auth.uid == id && request.resource.data.role == 'player' && request.resource.data.active == false && request.resource.data.playerId == null && request.resource.data.registrationStatus == 'pending';
-      allow update: if admin() || (signedIn() && request.auth.uid == id && request.resource.data.role == resource.data.role && request.resource.data.leagueId == resource.data.leagueId && request.resource.data.playerId == resource.data.playerId && request.resource.data.active == resource.data.active && request.resource.data.registrationStatus == resource.data.registrationStatus);
-      allow delete: if admin();
-    }
-
-    match /leagues/{leagueId} {
-      allow get: if signedIn() && (admin() || me().leagueId == leagueId);
-      allow list: if admin();
-      allow create, update, delete: if admin();
-    }
-
-    match /players/{playerId} {
-      allow get, list: if signedIn() && me().leagueId == resource.data.leagueId;
-      allow create, update, delete: if admin();
-    }
-
-    match /matches/{matchId} {
-      allow get, list: if signedIn() && (admin() || me().leagueId == resource.data.leagueId);
-      allow create: if admin();
-      allow delete: if admin();
       allow update: if admin()
         && (
           // Prima dell'inizio la partita è modificabile normalmente.
           !('scheduledStart' in resource.data)
           || request.time < resource.data.scheduledStart
 
-          // Dopo l'inizio, l'Admin può aggiornare stato, risultato,
-          // finishedAt e gli altri dati amministrativi, ma non può
-          // cambiare data/ora o distinta senza lo sblocco eccezionale.
+          // Una partita TERMINATA è definitivamente congelata.
           || (
-            request.resource.data.scheduledStart == resource.data.scheduledStart
+            resource.data.status != 'finished'
+            && request.resource.data.scheduledStart == resource.data.scheduledStart
             && request.resource.data.lineup == resource.data.lineup
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['status','finishedAt','adminOverrideOpen'])
           )
 
-          // Sblocco eccezionale già previsto per la distinta.
-          || resource.data.adminOverrideOpen == true
-          || request.resource.data.adminOverrideOpen == true
+          // Durante lo sblocco eccezionale si può modificare solo la distinta
+          // e chiudere lo sblocco. Data/ora/squadre restano immutabili.
+          || (
+            resource.data.status != 'finished'
+            && resource.data.adminOverrideOpen == true
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['lineup','adminOverrideOpen'])
+          )
         );
 
       match /votes/{voterUid} {
         allow get, list: if admin();
         allow create: if player()
           && request.auth.uid == voterUid
-          && matchData(matchId).status in ['scheduled','in_progress','voting_open','finished']
-          && matchData(matchId).scheduledStart <= request.time
-          && (
-            (('finishedAt' in matchData(matchId))
-              && request.time <= matchData(matchId).finishedAt + duration.value(6, 'h'))
-            ||
-            (!('finishedAt' in matchData(matchId))
-              && request.time <= matchData(matchId).scheduledStart + duration.value(6, 'h'))
-          )
+          && matchData(matchId).status == 'finished'
+          && ('finishedAt' in matchData(matchId))
+          && request.time <= matchData(matchId).finishedAt + duration.value(6, 'h')
           && me().playerId in matchData(matchId).lineup
           && request.resource.data.keys().hasOnly(['ranking'])
           && request.resource.data.ranking is list
