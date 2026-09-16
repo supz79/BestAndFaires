@@ -1,10 +1,11 @@
-/* Best&Faires Beta.7.20.4 - A-11 Finestra voto 6h */
+/* Best&Faires Beta.7.20.4 - A-13 Voto persistente e congelato */
 
 let players = [];
 let matches = [];
 let currentMatch = null;
 let lineup = [];
 let localVoted = false;
+let localVoteRanking = [];
 let calendarDraft = [];
 let currentMatchStats = {};
 let currentMatchSummary = {};
@@ -25,6 +26,8 @@ function resetMatchViewCache(){
   matchStatsExceptionOpen = false;
   matchDetailsPromise = null;
   matchDetailsFor = null;
+  localVoted = false;
+  localVoteRanking = [];
   currentMatch = null;
   lineup = [];
   if(voteTimer){ clearInterval(voteTimer); voteTimer=null; }
@@ -541,8 +544,17 @@ $('#lockBtn')?.addEventListener('click',async()=>{
   catch(e){ console.error(e); alert('Firebase ha rifiutato la modifica della distinta.'); }
 });
 async function loadOwnVoteState(){
-  localVoted=false; if(!isPlayer()||!currentMatch) return;
-  try{ const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).get(); localVoted=snap.exists; }catch(e){console.error(e);}
+  localVoted=false;
+  localVoteRanking=[];
+  if(!isPlayer()||!currentMatch) return;
+  try{
+    const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).get();
+    localVoted=snap.exists;
+    if(localVoted){
+      const data=snap.data()||{};
+      localVoteRanking=Array.isArray(data.ranking)?data.ranking.filter(Boolean).slice(0,3):[];
+    }
+  }catch(e){console.error(e);}
 }
 function playerHasMatchPresence(playerId){
   const st=currentMatchStats?.[playerId];
@@ -564,7 +576,12 @@ function populateVotes(){
     const s=$('#vote'+n);
     if(!s) return;
     s.innerHTML='<option value="">Seleziona...</option>'+eligible.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(playerName(p))}</option>`).join('');
-    if(selected[n] && eligible.some(p=>p.id===selected[n])) s.value=selected[n];
+
+    // Dopo logout/login il valore dei menu deve provenire dal voto
+    // realmente memorizzato in Firebase, non dallo stato precedente della pagina.
+    const persisted=localVoted ? localVoteRanking[n-1] : null;
+    const valueToRestore=persisted || selected[n];
+    if(valueToRestore && eligible.some(p=>p.id===valueToRestore)) s.value=valueToRestore;
     s.disabled=localVoted;
   });
   $('#submitVote').disabled=localVoted || eligible.length<3;
@@ -605,6 +622,7 @@ $('#submitVote')?.addEventListener('click',async()=>{
     });
 
     localVoted=true;
+    localVoteRanking=[...ranking];
     renderMatch();
     alert('✅ Voto registrato. Grazie!');
   }
