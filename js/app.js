@@ -187,12 +187,14 @@ async function loadLeague(){
   window.currentLeagueData=snap.exists?snap.data():{};
 }
 async function refresh(){
+  console.log('[A-06 DIAGNOSTIC] refresh START', {uid:uid(), authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, leagueId:leagueId()});
   try{
     await loadLeague(); await loadPlayers(); await loadMatches();
     renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar(); await renderAdminPlayers(); await loadPendingRegistrations();
     await syncPublicResultsForAdmin();
     await renderRanking(); await loadOwnVoteState(); renderMatch();
-  }catch(e){ console.error(e); const msg=$('#voteMsg'); if(msg) msg.textContent='❌ Errore nel caricamento dei dati da Firebase.'; }
+    console.log('[A-06 DIAGNOSTIC] refresh END', {matchId:currentMatch?.id||null, lineup:currentMatch?.lineup||[], stats:Object.keys(currentMatchStats||{}), summary:currentMatchSummary||{}});
+  }catch(e){ console.error('[A-06 DIAGNOSTIC] refresh ERROR', e); const msg=$('#voteMsg'); if(msg) msg.textContent='❌ Errore nel caricamento dei dati da Firebase.'; }
 }
 function renderLeague(){
   if(!window.currentLeagueData) return;
@@ -201,12 +203,13 @@ function renderLeague(){
 }
 
 async function loadMatchSummary(matchId=currentMatch?.id){
+  console.log('[A-06 DIAGNOSTIC] loadMatchSummary START', {matchId, authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null});
   currentMatchSummary={};
   if(!matchId) return;
   try{
     const snap=await db.collection('matches').doc(matchId).collection('summary').doc('main').get();
     currentMatchSummary=snap.exists?({id:snap.id,...(snap.data()||{})}):{};
-  }catch(e){ console.error('Caricamento riepilogo partita:',e); }
+  }catch(e){ console.error('[A-06 DIAGNOSTIC] loadMatchSummary ERROR', {matchId, authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, error:e}); }
 }
 function matchScoreText(m, summary){
   const home=m?.homeTeam||leagueTeam(), away=m?.awayTeam||m?.opponent||'Avversario';
@@ -251,12 +254,22 @@ async function renderPlayedMatches(){
 }
 
 async function loadMatchStats(matchId=currentMatch?.id){
+  console.log('[A-06 DIAGNOSTIC] loadMatchStats START', {matchId, currentMatchId:currentMatch?.id||null, lineup:currentMatch?.lineup||[], authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null});
   currentMatchStats={};
   if(!matchId) return;
   try{
-    const snap=await db.collection('matches').doc(matchId).collection('stats').get();
-    snap.forEach(d=>{ currentMatchStats[d.id]={id:d.id,...(d.data()||{})}; });
-  }catch(e){ console.error('Caricamento statistiche partita:',e); }
+    // A-05: evita la lettura LIST della sottocollezione stats, che su Firebase
+    // viene rifiutata dalle Rules effettivamente applicate. La distinta contiene
+    // già gli ID dei giocatori, quindi leggiamo i singoli documenti autorizzati.
+    const ids=Array.isArray(currentMatch?.lineup)?[...new Set(currentMatch.lineup)]:[];
+    if(!ids.length) return;
+    const refs=ids.map(playerId=>db.collection('matches').doc(matchId).collection('stats').doc(playerId));
+    const snaps=await Promise.all(refs.map((ref,i)=>ref.get().then(snap=>{ console.log('[A-06 DIAGNOSTIC] stats GET OK', {matchId, playerId:ids[i], exists:snap.exists}); return snap; }).catch(error=>{ console.error('[A-06 DIAGNOSTIC] stats GET ERROR', {matchId, playerId:ids[i], authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, error}); throw error; })));
+    console.log('[A-06 DIAGNOSTIC] loadMatchStats READS COMPLETE', {matchId, count:snaps.length});
+    snaps.forEach((snap,i)=>{
+      if(snap.exists) currentMatchStats[ids[i]]={id:ids[i],...(snap.data()||{})};
+    });
+  }catch(e){ console.error('[A-06 DIAGNOSTIC] loadMatchStats ERROR', {matchId, currentMatchId:currentMatch?.id||null, lineup:currentMatch?.lineup||[], authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, error:e}); }
 }
 function statNum(v){ const n=Number(v); return Number.isFinite(n)&&n>=0?Math.floor(n):0; }
 function renderMatchStats(){
@@ -385,6 +398,7 @@ function renderMatch(){
   }
   const statsMatchId=currentMatch.id;
   if(renderMatch._loadedStatsFor!==statsMatchId){
+    console.log('[A-06 DIAGNOSTIC] renderMatch FIRST LOAD', {statsMatchId, authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, lineup:currentMatch.lineup||[]});
     renderMatch._loadedStatsFor=statsMatchId;
     Promise.all([loadMatchStats(statsMatchId),loadMatchSummary(statsMatchId)]).then(()=>{ if(currentMatch?.id===statsMatchId){ renderMatchStats(); } });
   }
@@ -451,7 +465,7 @@ $('#lockBtn')?.addEventListener('click',async()=>{
 });
 async function loadOwnVoteState(){
   localVoted=false; if(!isPlayer()||!currentMatch) return;
-  try{ const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).get(); localVoted=snap.exists; }catch(e){console.error(e);}
+  try{ console.log('[A-06 DIAGNOSTIC] loadOwnVoteState START', {matchId:currentMatch.id, authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null}); const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).get(); localVoted=snap.exists; console.log('[A-06 DIAGNOSTIC] loadOwnVoteState OK', {matchId:currentMatch.id, exists:snap.exists}); }catch(e){console.error('[A-06 DIAGNOSTIC] loadOwnVoteState ERROR',{matchId:currentMatch?.id||null,authUid:firebase.auth().currentUser?.uid||null,role:window.currentUserData?.role||null,error:e});}
 }
 function populateVotes(){
   const me=currentPlayer(), eligible=players.filter(p=>lineup.includes(p.id)&&p.id!==me?.id);
@@ -632,7 +646,8 @@ function renderPlayers(){
 function updateProgress(){
   if(!currentMatch)return; const total=lineup.length;
   if(!isAdmin()){ $('#voteProgress').style.width='0%'; $('#voteCount').textContent=`${total} giocatori in distinta`; return; }
-  db.collection('matches').doc(currentMatch.id).collection('votes').get().then(s=>{const voted=s.size;$('#voteProgress').style.width=(total?Math.min(100,voted/total*100):0)+'%';$('#voteCount').textContent=`${voted} / ${total} giocatori hanno votato`;}).catch(console.error);
+  console.log('[A-06 DIAGNOSTIC] updateProgress START', {matchId:currentMatch.id, authUid:firebase.auth().currentUser?.uid||null, role:window.currentUserData?.role||null, lineupTotal:total});
+  db.collection('matches').doc(currentMatch.id).collection('votes').get().then(s=>{const voted=s.size;$('#voteProgress').style.width=(total?Math.min(100,voted/total*100):0)+'%';$('#voteCount').textContent=`${voted} / ${total} giocatori hanno votato`;}).catch(e=>console.error('[A-06 DIAGNOSTIC] updateProgress ERROR',{matchId:currentMatch?.id||null,authUid:firebase.auth().currentUser?.uid||null,role:window.currentUserData?.role||null,error:e}));
 }
 
 // ---------- Registrazioni e rosa Admin ----------
