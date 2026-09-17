@@ -468,3 +468,59 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
   }
 }
 
+/* ============================================================
+   A-33.2 · CALENDARIO — CORREZIONE LAYOUT AZIONI
+   Solo grafica/UX. Nessuna modifica alla logica applicativa.
+   ============================================================ */
+
+.calendar-row{
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-areas:
+    "info status"
+    "actions actions";
+  column-gap:24px;
+  row-gap:10px;
+}
+
+.calendar-row > div:first-child{
+  grid-area:info;
+}
+
+.calendar-row > .pill{
+  grid-area:status;
+}
+
+.calendar-actions{
+  grid-area:actions;
+  width:100%;
+  justify-content:flex-end;
+  align-items:center;
+  flex-wrap:nowrap;
+  min-width:0;
+}
+
+.calendar-actions .small-btn{
+  flex:0 0 auto;
+  box-sizing:border-box;
+}
+
+@media(max-width:650px){
+  .calendar-row{
+    grid-template-columns:1fr;
+    grid-template-areas:
+      "info"
+      "status"
+      "actions";
+  }
+
+  .calendar-row > .pill{
+    justify-self:start;
+  }
+
+  .calendar-actions{
+    width:100%;
+    justify-content:flex-start;
+    flex-wrap:wrap;
+  }
+}
+
