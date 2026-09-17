@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.20.4 - A-15 Fix selezione Home dopo apertura Calendario */
+/* Best&Faires Beta.7.20.4 - A-16 Countdown prossima partita */
 
 let players = [];
 let matches = [];
@@ -89,6 +89,7 @@ function votingWindowOpen(m=currentMatch){
 }
 function votingRemainingMs(m=currentMatch){ const d=votingDeadlineDate(m); return d ? Math.max(0,d.getTime()-Date.now()) : 0; }
 function formatCountdown(ms){ const total=Math.floor(Math.max(0,ms)/1000); const days=Math.floor(total/86400); const h=Math.floor(total%86400/3600); const min=Math.floor(total%3600/60); const sec=total%60; return `${days}g ${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
+function formatNextMatchCountdown(ms){ const total=Math.max(0,Math.floor(ms/1000)); const days=Math.floor(total/86400); const h=Math.floor(total%86400/3600); const min=Math.floor(total%3600/60); return `${String(days).padStart(2,'0')} gg : ${String(h).padStart(2,'0')} hh : ${String(min).padStart(2,'0')} mm`; }
 function isLineupLocked(){
   if (!currentMatch) return true;
   if (String(currentMatch.status||'')==='finished') return true;
@@ -191,6 +192,18 @@ function renderDashboard(){
   else if(started) { label='IN CORSO'; cls='pill'; }
   else { label='PROSSIMA'; cls='pill'; }
   if(state){state.textContent=label;state.className=cls;}
+  const countdown=$('#matchCountdown');
+  if(countdown){
+    const nextDate=parseDateTime(currentMatch);
+    const isUpcoming=!!nextDate && nextDate.getTime()>Date.now() && ['scheduled'].includes(String(currentMatch.status||'scheduled'));
+    if(isUpcoming){
+      countdown.textContent=`⏳ Mancano ${formatNextMatchCountdown(nextDate.getTime()-Date.now())}`;
+      countdown.classList.remove('hidden');
+    }else{
+      countdown.textContent='';
+      countdown.classList.add('hidden');
+    }
+  }
   const dashboardCard=$('#dashboardMatchCard');
   if(dashboardCard){
     const clickable=!!currentMatch;
@@ -1162,7 +1175,6 @@ async function startVoteTimer(){
       const expiredId=currentMatch.id;
       try{
         await loadMatches();
-        // Se nel frattempo la selezione corrente è cambiata, aggiorniamo subito la UI.
         if(currentMatch?.id!==expiredId){
           await loadCurrentMatchDetails(currentMatch.id);
           await loadOwnVoteState();
@@ -1170,6 +1182,26 @@ async function startVoteTimer(){
         renderDashboard();
         renderMatch();
       }catch(e){ console.error('Aggiornamento partita dopo scadenza voti:',e); }
+    }
+
+    // Aggiorna la selezione quando il countdown della prossima partita arriva a zero.
+    // È un controllo singolo per partita, non crea richieste ripetute.
+    if(currentMatch && String(currentMatch.status||'')==='scheduled'){
+      const nextDate=parseDateTime(currentMatch);
+      if(nextDate && Date.now()>=nextDate.getTime() && expiredVoteMatchHandled!==`start:${currentMatch.id}`){
+        expiredVoteMatchHandled=`start:${currentMatch.id}`;
+        const scheduledId=currentMatch.id;
+        try{
+          await loadMatches();
+          if(currentMatch?.id===scheduledId){
+            renderDashboard();
+          }else{
+            await loadCurrentMatchDetails(currentMatch?.id);
+            await loadOwnVoteState();
+            renderMatch();
+          }
+        }catch(e){ console.error('Aggiornamento partita allo scadere del countdown:',e); }
+      }
     }
   },1000);
   if(voteProgressTimer) clearInterval(voteProgressTimer);
