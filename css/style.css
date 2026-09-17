@@ -82,3 +82,40 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 /* Beta 7.20 - storico partite, risultati e MVP */
 .match-result-editor{margin:0 0 18px;padding:15px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc}.result-editor-title{font-weight:900;margin-bottom:10px}.result-inputs{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:end}.result-inputs label{margin:0}.result-inputs input{width:100%;margin-top:6px;padding:11px;border:1px solid #d1d5db;border-radius:10px}.result-inputs>span{font-weight:900;font-size:22px;padding-bottom:8px}.calendar-actions{display:flex;gap:6px}.played-match-card{cursor:pointer;transition:.15s}.played-match-card:hover{transform:translateY(-2px);box-shadow:0 10px 25px rgba(17,24,39,.08)}.played-match-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.played-match-head h3{margin:5px 0}.played-match-head small{color:#6b7280}.played-match-body{margin-top:14px}.played-score{font-size:25px;text-align:center;padding:14px;border-radius:12px;background:#f8fafc}.played-score b{font-size:32px;margin:0 10px}.mvp-box{margin-top:10px;padding:13px;border-radius:12px;background:#ecfdf5;color:#166534;text-align:center}.played-player-row{display:grid;grid-template-columns:minmax(180px,1fr) repeat(5,70px);gap:10px;align-items:center;padding:10px 0;border-top:1px solid #e5e7eb}.played-player-row span{text-align:center}.played-header{font-size:.75rem;color:#64748b;font-weight:800;text-transform:uppercase}.played-stats{margin-top:12px}.score-placeholder{color:#94a3b8}@media(max-width:760px){.calendar-actions{flex-wrap:wrap}.played-player-row{grid-template-columns:minmax(145px,1fr) repeat(5,55px);min-width:520px}.played-stats{overflow-x:auto}.result-inputs{grid-template-columns:1fr auto 1fr}}
 .result-auto-score{display:flex;flex-direction:column;gap:3px;align-items:center;justify-content:end}.result-auto-score strong{font-size:30px;line-height:1}.result-auto-score small{font-size:.72rem;color:#64748b}.result-team{font-weight:800}.scorers-line{margin-top:10px;padding:12px 14px;border-radius:12px;background:#f8fafc;text-align:center}.scorers-line b{margin-right:5px}
+
+/* Beta 7.25 - Tema grafico per lega, attivo dinamicamente da Firestore. */
+:root{
+  --league-primary:#159447;
+  --league-primary-dark:#0d6b32;
+  --league-primary-soft:#effaf3;
+  --league-border:#cfe7d6;
+  --league-muted:#5a7463;
+}
+.league-hero{
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(135deg,#ffffff 0%,#fbfefc 52%,var(--league-primary-soft) 100%);
+  color:var(--league-primary-dark);
+  border:1px solid var(--league-border);
+  min-height:150px;
+  box-shadow:0 7px 24px rgba(21,148,71,.08);
+}
+.league-hero::before{
+  content:"";
+  position:absolute;
+  inset:0 auto 0 0;
+  width:9px;
+  background:var(--league-primary);
+}
+.league-hero-copy{padding-left:8px;}
+.league-hero .eyebrow{color:var(--league-primary);}
+.league-hero h1{color:var(--league-primary-dark);}
+.league-hero p{color:var(--league-muted);}
+.league-hero-logo-wrap{display:flex;align-items:center;justify-content:center;min-width:150px;min-height:150px;}
+.league-hero-logo{width:136px;height:136px;object-fit:contain;border-radius:16px;background:#fff;display:block;}
+.league-hero .hero-ball{font-size:72px;color:var(--league-primary);}
+@media(max-width:650px){
+  .league-hero-logo-wrap{min-width:108px;min-height:108px;}
+  .league-hero-logo{width:98px;height:98px;}
+  .league-hero .hero-ball{font-size:55px;}
+}

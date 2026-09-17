@@ -233,10 +233,53 @@ async function refresh(){
     updateProgress();
   }catch(e){ console.error(e); const msg=$('#voteMsg'); if(msg) msg.textContent='❌ Errore nel caricamento dei dati da Firebase.'; }
 }
+const BUILTIN_LEAGUE_THEMES = {
+  demo: {
+    primary: '#159447',
+    primaryDark: '#0d6b32',
+    primarySoft: '#effaf3',
+    border: '#cfe7d6',
+    muted: '#5a7463',
+    logo: 'assets/juvenilia-uras-logo.jpg',
+    logoAlt: 'Stemma Juvenilia Hockey Uras'
+  }
+};
+
+function applyLeagueTheme(){
+  const root=document.documentElement;
+  const data=window.currentLeagueData||{};
+  const builtIn=BUILTIN_LEAGUE_THEMES[leagueId()]||{};
+  const theme=Object.assign({},builtIn,data.theme||{});
+  if(theme.primary) root.style.setProperty('--league-primary',theme.primary);
+  if(theme.primaryDark) root.style.setProperty('--league-primary-dark',theme.primaryDark);
+  if(theme.primarySoft) root.style.setProperty('--league-primary-soft',theme.primarySoft);
+  if(theme.border) root.style.setProperty('--league-border',theme.border);
+  if(theme.muted) root.style.setProperty('--league-muted',theme.muted);
+  const meta=document.querySelector('meta[name="theme-color"]');
+  if(meta && (theme.primaryDark||theme.primary)) meta.setAttribute('content',theme.primaryDark||theme.primary);
+
+  const logo=$('#leagueLogo');
+  const fallback=$('#leagueLogoFallback');
+  const logoUrl=theme.logoUrl||theme.logo||'';
+  if(logo){
+    if(logoUrl){
+      logo.src=logoUrl;
+      logo.alt=theme.logoAlt||`Stemma ${data.name||'della lega'}`;
+      logo.classList.remove('hidden');
+      if(fallback) fallback.classList.add('hidden');
+    }else{
+      logo.removeAttribute('src');
+      logo.classList.add('hidden');
+      if(fallback) fallback.classList.remove('hidden');
+    }
+  }
+}
+
 function renderLeague(){
   if(!window.currentLeagueData) return;
   $('#leagueName').textContent=window.currentLeagueData.name||leagueTeam()||'Best&Faires';
   $('#seasonName').textContent=`Stagione ${window.currentLeagueData.season||''}`;
+  applyLeagueTheme();
 }
 
 async function loadMatchSummary(matchId=currentMatch?.id){
