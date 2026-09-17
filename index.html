@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0d6b32">
   <meta name="description" content="Best&Faires - il voto ai migliori in campo">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="css/style.css?v=7.27">
+  <link rel="stylesheet" href="css/style.css?v=7.28">
   <title>Best&Faires</title>
 </head>
 <body>
@@ -16,7 +16,15 @@
 </header>
 
 <main id="app">
-  <section id="login" class="screen active">
+  <section id="sessionBoot" class="session-boot screen active" aria-live="polite">
+    <div class="session-boot-card">
+      <img class="session-boot-logo" src="assets/best-faires-logo.png" alt="Best&Faires">
+      <div class="session-spinner" aria-hidden="true"></div>
+      <p>Verifica sessione in corso...</p>
+    </div>
+  </section>
+
+  <section id="login" class="screen">
     <div class="card login-card">
       <img class="login-logo" src="assets/best-faires-logo.png" alt="Best&Faires - Fair Play, Better Team">
       <div class="section-head"><div><span class="eyebrow">ACCESSO</span><h2>Accedi a Best&Faires</h2></div></div>

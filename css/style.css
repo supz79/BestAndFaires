@@ -119,3 +119,13 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
   .league-hero-logo{width:122px;height:122px;}
   .league-hero .hero-ball{font-size:55px;}
 }
+
+
+/* A-20 - avvio sessione: evita il flash della schermata Login durante il refresh */
+.session-boot{min-height:55vh;align-items:center;justify-content:center;}
+.session-boot.active{display:flex;}
+.session-boot-card{width:min(420px,92vw);background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:28px 24px;text-align:center;box-shadow:0 12px 30px rgba(17,24,39,.08);}
+.session-boot-logo{display:block;width:min(300px,80%);height:auto;margin:0 auto 18px;object-fit:contain;}
+.session-spinner{width:28px;height:28px;margin:0 auto 12px;border:3px solid #d1d5db;border-top-color:var(--league-primary,#159447);border-radius:50%;animation:sessionSpin .8s linear infinite;}
+.session-boot-card p{margin:0;color:#64748b;font-weight:700;}
+@keyframes sessionSpin{to{transform:rotate(360deg)}}

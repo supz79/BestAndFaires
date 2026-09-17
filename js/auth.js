@@ -11,8 +11,11 @@ const registerMsg = document.querySelector('#registerMsg');
 const verifyMsg = document.querySelector('#verifyMsg');
 const verifyEmailText = document.querySelector('#verifyEmailText');
 const roleBtn = document.querySelector('#roleBtn');
+const sessionBoot = document.querySelector('#sessionBoot');
+function hideSessionBoot(){ sessionBoot?.classList.remove('active'); }
 
 async function showAuthenticatedArea(userData) {
+  hideSessionBoot();
   window.currentUserData = userData;
   if (typeof window.applyRolePermissions === 'function') await window.applyRolePermissions(userData);
   document.querySelectorAll('.screen').forEach(x => x.classList.remove('active'));
@@ -22,6 +25,7 @@ async function showAuthenticatedArea(userData) {
 }
 
 function showLogin(message='') {
+  hideSessionBoot();
   document.querySelectorAll('.screen').forEach(x => x.classList.remove('active'));
   loginScreen.classList.add('active');
   roleBtn.textContent = 'Accedi';
@@ -29,12 +33,14 @@ function showLogin(message='') {
 }
 
 function showRegister() {
+  hideSessionBoot();
   document.querySelectorAll('.screen').forEach(x => x.classList.remove('active'));
   registerScreen?.classList.add('active');
   if(registerMsg) registerMsg.textContent='';
 }
 
 function showVerifyEmail(user, message='') {
+  hideSessionBoot();
   document.querySelectorAll('.screen').forEach(x => x.classList.remove('active'));
   verifyScreen?.classList.add('active');
   if (verifyEmailText) verifyEmailText.textContent = user?.email || '';
