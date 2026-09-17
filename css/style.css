@@ -111,11 +111,11 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 .league-hero .eyebrow{color:var(--league-primary);}
 .league-hero h1{color:var(--league-primary-dark);}
 .league-hero p{color:var(--league-muted);}
-.league-hero-logo-wrap{display:flex;align-items:center;justify-content:center;min-width:150px;min-height:150px;}
-.league-hero-logo{width:136px;height:136px;object-fit:contain;border-radius:16px;background:#fff;display:block;}
+.league-hero-logo-wrap{display:flex;align-items:center;justify-content:center;min-width:190px;min-height:190px;padding:6px 18px 6px 10px;}
+.league-hero-logo{width:176px;height:176px;object-fit:contain;object-position:center;border:0;border-radius:0;background:transparent;display:block;mix-blend-mode:multiply;}
 .league-hero .hero-ball{font-size:72px;color:var(--league-primary);}
 @media(max-width:650px){
-  .league-hero-logo-wrap{min-width:108px;min-height:108px;}
-  .league-hero-logo{width:98px;height:98px;}
+  .league-hero-logo-wrap{min-width:132px;min-height:132px;padding:4px 8px;}
+  .league-hero-logo{width:122px;height:122px;}
   .league-hero .hero-ball{font-size:55px;}
 }
