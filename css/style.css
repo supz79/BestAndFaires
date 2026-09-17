@@ -358,18 +358,19 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 }
 
 /* ============================================================
-   A-33.1 · CALENDARIO — MENU AZIONI
-   Solo grafica/UX. Nessuna modifica alla logica applicativa.
+   A-33.3 · CALENDARIO — MENU AZIONI
+   Correzione isolata del layout dei comandi.
+   Solo CSS: nessuna modifica alla logica applicativa.
    ============================================================ */
 
 .calendar-row{
   grid-template-columns:minmax(0,1fr) auto;
   grid-template-areas:
     "info status"
-    "info actions";
+    "actions actions";
   column-gap:24px;
   row-gap:10px;
-  padding:18px 18px;
+  padding:18px;
   min-height:108px;
 }
 
@@ -381,15 +382,6 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
   column-gap:14px;
 }
 
-.calendar-row > div:first-child span{
-  min-width:0;
-  line-height:1.3;
-}
-
-.calendar-row > div:first-child small{
-  line-height:1.35;
-}
-
 .calendar-row > .pill{
   grid-area:status;
   justify-self:end;
@@ -398,46 +390,42 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
   padding:7px 11px;
 }
 
-.calendar-actions{
+/* Specificità maggiore del generico .calendar-row > div */
+.calendar-row > .calendar-actions{
   grid-area:actions;
   display:flex;
+  width:100%;
   justify-content:flex-end;
   align-items:center;
   gap:8px;
   flex-wrap:nowrap;
+  min-width:0;
+  grid-template-columns:none;
 }
 
-.calendar-actions .small-btn{
+.calendar-row > .calendar-actions .small-btn{
+  flex:0 0 auto;
   min-height:42px;
   padding:9px 13px;
   border-radius:11px;
-  background:#fff;
-  border:1px solid #d1d5db;
-  color:#111827;
-  font-weight:650;
+  box-sizing:border-box;
   white-space:nowrap;
-  transition:background-color .15s ease,border-color .15s ease,transform .15s ease,box-shadow .15s ease;
 }
 
-.calendar-actions .small-btn:hover{
+.calendar-row > .calendar-actions .small-btn:hover{
   background:#f8fafc;
   border-color:#94a3b8;
   transform:translateY(-1px);
   box-shadow:0 4px 10px rgba(17,24,39,.06);
 }
 
-.calendar-actions .small-btn:active{
-  transform:translateY(0);
-  box-shadow:none;
-}
-
-.calendar-actions .small-btn.danger{
+.calendar-row > .calendar-actions .small-btn.danger{
   background:#fff;
   color:#b91c1c;
   border-color:#fecaca;
 }
 
-.calendar-actions .small-btn.danger:hover{
+.calendar-row > .calendar-actions .small-btn.danger:hover{
   background:#fef2f2;
   border-color:#fca5a5;
 }
@@ -449,8 +437,6 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
       "info"
       "status"
       "actions";
-    gap:12px;
-    padding:16px;
   }
 
   .calendar-row > .pill{
@@ -458,69 +444,13 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
     align-self:auto;
   }
 
-  .calendar-actions{
+  .calendar-row > .calendar-actions{
     justify-content:flex-start;
     flex-wrap:wrap;
   }
 
-  .calendar-actions .small-btn{
+  .calendar-row > .calendar-actions .small-btn{
     min-height:40px;
-  }
-}
-
-/* ============================================================
-   A-33.2 · CALENDARIO — CORREZIONE LAYOUT AZIONI
-   Solo grafica/UX. Nessuna modifica alla logica applicativa.
-   ============================================================ */
-
-.calendar-row{
-  grid-template-columns:minmax(0,1fr) auto;
-  grid-template-areas:
-    "info status"
-    "actions actions";
-  column-gap:24px;
-  row-gap:10px;
-}
-
-.calendar-row > div:first-child{
-  grid-area:info;
-}
-
-.calendar-row > .pill{
-  grid-area:status;
-}
-
-.calendar-actions{
-  grid-area:actions;
-  width:100%;
-  justify-content:flex-end;
-  align-items:center;
-  flex-wrap:nowrap;
-  min-width:0;
-}
-
-.calendar-actions .small-btn{
-  flex:0 0 auto;
-  box-sizing:border-box;
-}
-
-@media(max-width:650px){
-  .calendar-row{
-    grid-template-columns:1fr;
-    grid-template-areas:
-      "info"
-      "status"
-      "actions";
-  }
-
-  .calendar-row > .pill{
-    justify-self:start;
-  }
-
-  .calendar-actions{
-    width:100%;
-    justify-content:flex-start;
-    flex-wrap:wrap;
   }
 }
 
