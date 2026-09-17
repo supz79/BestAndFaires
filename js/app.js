@@ -1,11 +1,10 @@
-/* Best&Faires Beta.7.20.4 - A-13 Voto persistente e congelato */
+/* Best&Faires Beta.7.20.4 - A-15 Fix selezione Home dopo apertura Calendario */
 
 let players = [];
 let matches = [];
 let currentMatch = null;
 let lineup = [];
 let localVoted = false;
-let localVoteRanking = [];
 let calendarDraft = [];
 let currentMatchStats = {};
 let currentMatchSummary = {};
@@ -26,8 +25,6 @@ function resetMatchViewCache(){
   matchStatsExceptionOpen = false;
   matchDetailsPromise = null;
   matchDetailsFor = null;
-  localVoted = false;
-  localVoteRanking = [];
   currentMatch = null;
   lineup = [];
   if(voteTimer){ clearInterval(voteTimer); voteTimer=null; }
@@ -115,15 +112,12 @@ async function loadPlayers(){
   players = snap.docs.map(d=>({id:d.id,...d.data()})).filter(p=>p.active!==false);
   players.sort((a,b)=>playerName(a).localeCompare(playerName(b),'it'));
 }
-async function loadMatches(){
-  const snap = await db.collection('matches').where('leagueId','==',leagueId()).get();
-  matches = snap.docs.map(d=>({id:d.id,...d.data()}));
-  matches.sort((a,b)=>(parseDateTime(a)?.getTime()||0)-(parseDateTime(b)?.getTime()||0));
+function selectHomeMatch(){
+  if(!matches.length){ currentMatch=null; lineup=[]; return null; }
 
-  // Per il Player la priorita e' la partita attualmente in corso
-  // alla quale il giocatore appartiene. Solo se non esiste, mostriamo
-  // la prossima partita futura. Questo evita di saltare una partita in
-  // corso solo perche' esiste un'altra partita piu' avanti nel calendario.
+  // Se il Player e' convocato, la Home privilegia una partita in corso
+  // o una TERMINATA con votazione ancora aperta. Solo in assenza di queste
+  // viene mostrata la prossima partita futura.
   if(isPlayer()){
     const meId=window.currentUserData?.playerId;
     const activeNow=matches.filter(m=>{
@@ -132,9 +126,6 @@ async function loadMatches(){
       const status=String(m.status||'');
       const blocked=['cancelled','postponed'].includes(status);
       const started=!!d && Date.now()>=d.getTime();
-      // Il Player deve vedere come principale la partita attualmente IN CORSO,
-      // purché sia convocato. Una partita TERMINATA resta invece selezionabile
-      // solo durante la finestra di voto delle 6 ore.
       const isLive = started && eligible && !blocked && ['in_progress','voting_open'].includes(status);
       const isFinishedVoting = status==='finished' && eligible && votingWindowOpen(m);
       return isLive || isFinishedVoting;
@@ -149,9 +140,9 @@ async function loadMatches(){
     });
     currentMatch=activeNow[0] || future[0] || null;
   }else{
-    // Anche l'Admin deve vedere prima una partita attualmente in corso,
-    // non saltarla semplicemente perché nel calendario esiste una partita futura.
-    // Priorità: votazione aperta -> in corso -> altra partita già iniziata -> futura.
+    // La Home Admin privilegia: votazione aperta -> IN CORSO -> prossima futura.
+    // Una TERMINATA con voto scaduto non puo' diventare la partita principale,
+    // anche se l'Admin l'ha appena aperta dal Calendario.
     const activeNow = matches.filter(m=>{
       const d=parseDateTime(m);
       const status=String(m.status||'');
@@ -164,9 +155,17 @@ async function loadMatches(){
       const d=parseDateTime(m);
       return !!d && d.getTime()>Date.now() && !['finished','cancelled','postponed'].includes(String(m.status||''));
     });
-    currentMatch=votingFinished.sort((a,b)=>(b.finishedAt?.toDate?.()?.getTime?.()||0)-(a.finishedAt?.toDate?.()?.getTime?.()||0))[0] || activeNow[0] || future[0] || matches[0] || null;
+    currentMatch=votingFinished.sort((a,b)=>(b.finishedAt?.toDate?.()?.getTime?.()||0)-(a.finishedAt?.toDate?.()?.getTime?.()||0))[0] || activeNow[0] || future[0] || null;
   }
   lineup = currentMatch && Array.isArray(currentMatch.lineup) ? [...currentMatch.lineup] : [];
+  return currentMatch;
+}
+
+async function loadMatches(){
+  const snap = await db.collection('matches').where('leagueId','==',leagueId()).get();
+  matches = snap.docs.map(d=>({id:d.id,...d.data()}));
+  matches.sort((a,b)=>(parseDateTime(a)?.getTime()||0)-(parseDateTime(b)?.getTime()||0));
+  selectHomeMatch();
 }
 
 function renderDashboard(){
@@ -544,17 +543,8 @@ $('#lockBtn')?.addEventListener('click',async()=>{
   catch(e){ console.error(e); alert('Firebase ha rifiutato la modifica della distinta.'); }
 });
 async function loadOwnVoteState(){
-  localVoted=false;
-  localVoteRanking=[];
-  if(!isPlayer()||!currentMatch) return;
-  try{
-    const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).get();
-    localVoted=snap.exists;
-    if(localVoted){
-      const data=snap.data()||{};
-      localVoteRanking=Array.isArray(data.ranking)?data.ranking.filter(Boolean).slice(0,3):[];
-    }
-  }catch(e){console.error(e);}
+  localVoted=false; if(!isPlayer()||!currentMatch) return;
+  try{ const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).get(); localVoted=snap.exists; }catch(e){console.error(e);}
 }
 function playerHasMatchPresence(playerId){
   const st=currentMatchStats?.[playerId];
@@ -576,12 +566,7 @@ function populateVotes(){
     const s=$('#vote'+n);
     if(!s) return;
     s.innerHTML='<option value="">Seleziona...</option>'+eligible.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(playerName(p))}</option>`).join('');
-
-    // Dopo logout/login il valore dei menu deve provenire dal voto
-    // realmente memorizzato in Firebase, non dallo stato precedente della pagina.
-    const persisted=localVoted ? localVoteRanking[n-1] : null;
-    const valueToRestore=persisted || selected[n];
-    if(valueToRestore && eligible.some(p=>p.id===valueToRestore)) s.value=valueToRestore;
+    if(selected[n] && eligible.some(p=>p.id===selected[n])) s.value=selected[n];
     s.disabled=localVoted;
   });
   $('#submitVote').disabled=localVoted || eligible.length<3;
@@ -622,7 +607,6 @@ $('#submitVote')?.addEventListener('click',async()=>{
     });
 
     localVoted=true;
-    localVoteRanking=[...ranking];
     renderMatch();
     alert('✅ Voto registrato. Grazie!');
   }
@@ -1074,7 +1058,19 @@ async function commitImport(){
 
 $('#calendarList')?.addEventListener('click',e=>{
   const statsBtn=e.target.closest('.stats-match');
-  if(statsBtn&&isAdmin()){ const m=matches.find(x=>x.id===statsBtn.dataset.id); if(m){ currentMatch=m; lineup=Array.isArray(m.lineup)?[...m.lineup]:[]; renderMatch(); show('match'); } return; }
+  if(statsBtn&&isAdmin()){
+    const m=matches.find(x=>x.id===statsBtn.dataset.id);
+    if(m){
+      // Dettaglio calendario: currentMatch viene usata temporaneamente per la
+      // schermata partita, ma show('dashboard') ricalcolera' la Home dal calendario.
+      currentMatch=m;
+      lineup=Array.isArray(m.lineup)?[...m.lineup]:[];
+      localVoted=false;
+      renderMatch();
+      show('match');
+    }
+    return;
+  }
   const deleteBtn=e.target.closest('.delete-match');
   if(deleteBtn&&isAdmin()){ deleteMatch(deleteBtn.dataset.id); return; }
   const b=e.target.closest('.edit-match'); if(b){const m=matches.find(x=>x.id===b.dataset.id);openMatchEditor(m);}
@@ -1117,6 +1113,12 @@ $('#importCancel')?.addEventListener('click',()=>{$('#importPreviewCard').classL
 
 function show(id){
   if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return;
+  if(id==='dashboard'){
+    // La Home deve sempre ricalcolare la propria partita principale.
+    // Aprire un vecchio match dal Calendario non deve trascinarlo nella Home.
+    selectHomeMatch();
+    localVoted=false;
+  }
   $$('.screen').forEach(x=>x.classList.remove('active')); $('#'+id)?.classList.add('active');
   if(id==='ranking')renderRanking(); if(id==='players')renderPlayers(); if(id==='match')renderMatch(); if(id==='calendar')renderCalendar(); if(id==='played')renderPlayedMatches(); if(id==='dashboard')renderDashboard();
 }
