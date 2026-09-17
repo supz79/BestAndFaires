@@ -997,7 +997,12 @@ async function renderRanking(){
     ${rest ? `<div class="ranking-list">${rest}</div>` : ''}`;
 }
 function renderPlayers(){
-  $('#playersTable').innerHTML=players.map(p=>`<div class="rank"><span class="pos">⚽</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${lineup.includes(p.id)?'In distinta':'Fuori distinta'}</span></div></div>`).join('')||'<p class="muted">Nessun giocatore.</p>';
+  $('#playersTable').innerHTML=players.map(p=>{
+    const name=playerName(p), parts=name.trim().split(/\s+/).filter(Boolean);
+    const initials=(parts[0]?.[0]||'')+(parts.length>1?(parts[parts.length-1]?.[0]||''):'');
+    const inLineup=lineup.includes(p.id);
+    return `<div class="rank"><span class="pos">${escapeHtml(initials.toUpperCase())}</span><div><b>${escapeHtml(name)}</b><span class="sub roster-status ${inLineup?'in-lineup':''}">${inLineup?'In distinta':'Fuori distinta'}</span></div></div>`;
+  }).join('')||'<p class="muted">Nessun giocatore.</p>';
   renderSeasonStats();
 }
 function updateProgress(){

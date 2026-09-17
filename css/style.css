@@ -800,3 +800,162 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
     font-size:1rem;
   }
 }
+
+
+/* A-33.6 - Giocatori: identita' neutra + statistiche responsive */
+#players .card{
+  padding:24px 26px;
+}
+
+#players .rank{
+  grid-template-columns:48px minmax(0,1fr);
+  gap:12px;
+  padding:15px 4px;
+  min-height:58px;
+}
+
+#players .rank .pos{
+  width:40px;
+  height:40px;
+  display:grid;
+  place-items:center;
+  border:1px solid #e2e8f0;
+  border-radius:50%;
+  background:#f8fafc;
+  color:#0f172a;
+  font-size:.78rem;
+  font-weight:900;
+  letter-spacing:.02em;
+}
+
+#players .rank b{
+  font-size:1rem;
+  line-height:1.2;
+}
+
+#players .rank .sub{
+  margin-top:4px;
+  font-size:.78rem;
+}
+
+#players .rank .sub.roster-status{
+  display:inline-flex;
+  width:max-content;
+  margin-top:5px;
+  padding:3px 8px;
+  border-radius:999px;
+  background:#f1f5f9;
+  color:#64748b;
+  font-size:.7rem;
+  font-weight:700;
+}
+
+#players .rank .sub.roster-status.in-lineup{
+  background:#ecfdf5;
+  color:#047857;
+}
+
+#players #seasonStatsTable .card{
+  padding:0;
+  border:0;
+  box-shadow:none;
+  background:transparent;
+}
+
+#players #seasonStatsTable .stats-season{
+  margin-top:18px;
+}
+
+#players #seasonStatsTable .stats-header{
+  color:#64748b;
+}
+
+#players #seasonStatsTable .stats-row{
+  padding:13px 0;
+}
+
+@media(max-width:760px){
+  #players .card{
+    padding:20px 16px;
+  }
+
+  #players .rank{
+    grid-template-columns:42px minmax(0,1fr);
+    gap:10px;
+    padding:13px 2px;
+  }
+
+  #players .rank .pos{
+    width:36px;
+    height:36px;
+  }
+
+  #players #seasonStatsTable .stats-header{
+    display:none;
+  }
+
+  #players #seasonStatsTable .stats-season{
+    overflow:visible;
+    margin-top:14px;
+  }
+
+  #players #seasonStatsTable .stats-season .stats-row{
+    min-width:0;
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:6px;
+    padding:12px 0;
+  }
+
+  #players #seasonStatsTable .stats-season .stats-row > div{
+    grid-column:1 / -1;
+    padding-bottom:3px;
+  }
+
+  #players #seasonStatsTable .stats-season .stats-row > div b{
+    font-size:.92rem;
+  }
+
+  #players #seasonStatsTable .stats-season .stats-row > span{
+    min-width:0;
+    padding:7px 3px 6px;
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    background:#f8fafc;
+    text-align:center;
+    font-size:.88rem;
+    font-weight:800;
+  }
+
+  #players #seasonStatsTable .stats-season .stats-row > span::before{
+    display:block;
+    margin-bottom:2px;
+    color:#64748b;
+    font-size:.58rem;
+    font-weight:800;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+  }
+
+  #players #seasonStatsTable .stats-season .stats-row > span:nth-child(2)::before{content:'Pres.';}
+  #players #seasonStatsTable .stats-season .stats-row > span:nth-child(3)::before{content:'Gol';}
+  #players #seasonStatsTable .stats-season .stats-row > span:nth-child(4)::before{content:'Assist';}
+  #players #seasonStatsTable .stats-season .stats-row > span:nth-child(5)::before{content:'Gialli';}
+  #players #seasonStatsTable .stats-season .stats-row > span:nth-child(6)::before{content:'Rossi';}
+}
+
+@media(max-width:380px){
+  #players #seasonStatsTable .stats-season .stats-row{
+    gap:4px;
+  }
+
+  #players #seasonStatsTable .stats-season .stats-row > span{
+    padding-left:1px;
+    padding-right:1px;
+    font-size:.82rem;
+  }
+
+  #players #seasonStatsTable .stats-season .stats-row > span::before{
+    font-size:.52rem;
+  }
+}
