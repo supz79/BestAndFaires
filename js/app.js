@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.20.4 - A-23 Chiusura anticipata votazioni */
+/* Best&Faires Beta.7.20.4 - A-24 Conteggio voti Admin sincronizzato */
 
 let players = [];
 let matches = [];
@@ -856,8 +856,23 @@ function renderPlayers(){
 }
 function updateProgress(){
   if(!currentMatch)return; const total=lineup.length;
-  if(!isAdmin()){ $('#voteProgress').style.width='0%'; $('#voteCount').textContent=`${total} giocatori in distinta`; return; }
-  db.collection('matches').doc(currentMatch.id).collection('votes').get().then(s=>{const voted=s.size;$('#voteProgress').style.width=(total?Math.min(100,voted/total*100):0)+'%';$('#voteCount').textContent=`${voted} / ${total} giocatori hanno votato`;}).catch(console.error);
+  if(!isAdmin()){
+    $('#voteProgress').style.width='0%';
+    $('#voteCount').textContent=`${total} giocatori in distinta`;
+    return;
+  }
+  db.collection('matches').doc(currentMatch.id).collection('votes').get().then(s=>{
+    const voted=s.size;
+    const label=`${voted} / ${total} giocatori hanno votato`;
+    $('#voteProgress').style.width=(total?Math.min(100,voted/total*100):0)+'%';
+    $('#voteCount').textContent=label;
+    // La stessa informazione deve essere visibile anche nel pannello
+    // "Gestione votazione" dell'Admin.
+    const adminCount=$('#adminVoteCount');
+    if(adminCount) adminCount.textContent=label;
+  }).catch(err=>{
+    console.error('Aggiornamento conteggio voti:',err);
+  });
 }
 
 // ---------- Registrazioni e rosa Admin ----------
@@ -1238,6 +1253,7 @@ function show(id){
   if(id==='players')renderPlayers();
   if(id==='match'){
     renderMatch();
+    if(isAdmin() && currentMatch?.id) updateProgress();
     if(isPlayer() && currentMatch?.id){
       const matchId=currentMatch.id;
       loadOwnVoteState(matchId).then(()=>{
