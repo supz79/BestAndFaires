@@ -48,6 +48,22 @@ service cloud.firestore {
       );
     }
 
+    // Il tabellino può essere modificato: prima della finalizzazione,
+    // finché la finestra di voto è aperta. Una modifica eccezionale
+    // riapre temporaneamente la scrittura tramite flag server-side.
+    function tabellinoWriteAllowed(matchId) {
+      let m = matchData(matchId);
+      return m.tabellinoExceptionOpen == true
+        || m.status != 'finished'
+        || (
+          m.status == 'finished'
+          && (!('tabellinoFinalizzato' in m) || m.tabellinoFinalizzato != true)
+          && (!('votingClosed' in m) || m.votingClosed != true)
+          && ('finishedAt' in m)
+          && request.time <= m.finishedAt + duration.value(6, 'h')
+        );
+    }
+
 
     // =========================================================
     // VALIDAZIONE RISULTATI PUBBLICI
@@ -310,6 +326,45 @@ service cloud.firestore {
           ||
 
           // -----------------------------------------------
+          // APERTURA / CHIUSURA MODIFICA ECCEZIONALE TABELLINO
+          // -----------------------------------------------
+          (
+            resource.data.status == 'finished'
+            && request.resource.data.tabellinoExceptionOpen == true
+            && (!('tabellinoExceptionOpen' in resource.data) || resource.data.tabellinoExceptionOpen != true)
+            && (
+              resource.data.tabellinoFinalizzato == true
+              || resource.data.votingClosed == true
+              || (
+                ('finishedAt' in resource.data)
+                && request.time > resource.data.finishedAt + duration.value(6, 'h')
+              )
+            )
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys()
+                 .hasOnly([
+                   'tabellinoExceptionOpen',
+                   'updatedAt'
+                 ])
+          )
+
+          ||
+
+          (
+            resource.data.status == 'finished'
+            && resource.data.tabellinoExceptionOpen == true
+            && request.resource.data.tabellinoExceptionOpen == false
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys()
+                 .hasOnly([
+                   'tabellinoExceptionOpen',
+                   'updatedAt'
+                 ])
+          )
+
+          ||
+
+          // -----------------------------------------------
           // FINALIZZAZIONE DEL TABELLINO
           // -----------------------------------------------
           (
@@ -431,11 +486,15 @@ service cloud.firestore {
         allow create, update: if admin()
           && me().leagueId == matchData(matchId).leagueId
           && playerId in matchData(matchId).lineup
-          && validStatBase();
+          && validStatBase()
+          && tabellinoWriteAllowed(matchId);
 
 
-        // Solo Admin può cancellare le statistiche.
-        allow delete: if admin();
+        // Solo Admin può cancellare le statistiche, entro la finestra
+        // di modifica o durante una modifica eccezionale autorizzata.
+        allow delete: if admin()
+          && me().leagueId == matchData(matchId).leagueId
+          && tabellinoWriteAllowed(matchId);
       }
 
 
@@ -456,6 +515,7 @@ service cloud.firestore {
         // Solo Admin può salvare il risultato.
         allow create, update: if admin()
           && me().leagueId == matchData(matchId).leagueId
+          && tabellinoWriteAllowed(matchId)
           && request.resource.data.keys().hasOnly([
                'homeScore',
                'awayScore',
@@ -467,7 +527,9 @@ service cloud.firestore {
           && request.resource.data.awayScore >= 0;
 
 
-        allow delete: if admin();
+        allow delete: if admin()
+          && me().leagueId == matchData(matchId).leagueId
+          && tabellinoWriteAllowed(matchId);
       }
 
 

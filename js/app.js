@@ -448,6 +448,28 @@ async function loadCurrentMatchDetails(matchId=currentMatch?.id){
   return matchDetailsPromise;
 }
 function statNum(v){ const n=Number(v); return Number.isFinite(n)&&n>=0?Math.floor(n):0; }
+let autoFinalizeAttempted=new Set();
+function tabellinoAutoBloccato(m=currentMatch){
+  if(!m || String(m.status||'')!=='finished') return false;
+  if(m.votingClosed===true) return true;
+  const deadline=votingDeadlineDate(m);
+  return !!deadline && Date.now()>=deadline.getTime();
+}
+async function autoFinalizeTabellinoIfNeeded(m=currentMatch){
+  if(!isAdmin() || !m || String(m.status||'')!=='finished' || m.tabellinoFinalizzato===true || m.tabellinoExceptionOpen===true) return false;
+  if(!tabellinoAutoBloccato(m)) return false;
+  if(autoFinalizeAttempted.has(m.id)) return false;
+  autoFinalizeAttempted.add(m.id);
+  try{
+    await db.collection('matches').doc(m.id).update({tabellinoFinalizzato:true,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    if(currentMatch?.id===m.id) currentMatch.tabellinoFinalizzato=true;
+    return true;
+  }catch(e){
+    console.error('Finalizzazione automatica tabellino:',e);
+    autoFinalizeAttempted.delete(m.id);
+    return false;
+  }
+}
 function renderMatchStats(){
   const card=$('#matchStatsCard'), box=$('#matchStatsList'), resultBox=$('#matchResultEditor');
   const saveBtn=$('#saveMatchStatsBtn'), msg=$('#matchStatsMsg');
@@ -455,9 +477,11 @@ function renderMatchStats(){
   if(!card||!box||!currentMatch) return;
   const canEditBase=isAdmin() && String(currentMatch.status||'')!=='cancelled';
   const finalized=currentMatch.tabellinoFinalizzato===true;
+  const autoLocked=tabellinoAutoBloccato(currentMatch);
   const exceptionalOpen=matchStatsExceptionOpen===true;
-  const canEdit=canEditBase && (!finalized || exceptionalOpen);
+  const canEdit=canEditBase && ((!finalized && !autoLocked) || exceptionalOpen);
   const isFinished=String(currentMatch.status||'')==='finished';
+  void autoFinalizeTabellinoIfNeeded(currentMatch);
 
   // Il tabellino deve restare visibile all'Admin anche quando non ci sono ancora stats,
   // mentre al Player mostriamo la lettura solo quando esistono dati.
@@ -499,9 +523,18 @@ function renderMatchStats(){
   }
 
   if(msg){
-    if(finalized && !exceptionalOpen){ msg.textContent='🔒 Tabellino finalizzato e protetto. Clicca “Modifica eccezionale” per una correzione amministrativa.'; msg.className='muted'; }
-    else if(exceptionalOpen){ msg.textContent='⚠️ Modifica eccezionale attiva. Salva la correzione per richiudere il tabellino.'; msg.className='warning'; }
-    else { msg.textContent=''; msg.className='success'; }
+    if(exceptionalOpen){
+      msg.textContent='⚠️ Modifica eccezionale attiva. Salva la correzione per richiudere il tabellino.';
+      msg.className='warning';
+    }else if(finalized){
+      msg.textContent='🔒 Tabellino finalizzato e protetto. Clicca “Modifica eccezionale” per una correzione amministrativa.';
+      msg.className='muted';
+    }else if(autoLocked){
+      msg.textContent='🔒 Tabellino bloccato automaticamente al termine della finestra di voto. Clicca “Modifica eccezionale” per una correzione amministrativa.';
+      msg.className='muted';
+    }else{
+      msg.textContent=''; msg.className='success';
+    }
   }
   if(saveBtn){
     const showSave=canEdit;
@@ -510,16 +543,16 @@ function renderMatchStats(){
   }
   if(finalizeBtn){
     const already=finalized;
-    finalizeBtn.style.display=(isAdmin()&&isFinished&&!already&&!exceptionalOpen)?'':'none';
+    finalizeBtn.style.display=(isAdmin()&&isFinished&&!already&&!autoLocked&&!exceptionalOpen)?'':'none';
     finalizeBtn.disabled=!(isFinished&&Object.keys(currentMatchSummary).length>0);
   }
   if(exceptionalBtn){
-    exceptionalBtn.style.display=(isAdmin()&&isFinished&&finalized&&!exceptionalOpen)?'':'none';
+    exceptionalBtn.style.display=(isAdmin()&&isFinished&&(finalized||autoLocked)&&!exceptionalOpen)?'':'none';
   }
 }
 async function saveMatchStats(){
   if(!isAdmin()||!currentMatch) return;
-  if(currentMatch.tabellinoFinalizzato===true && !matchStatsExceptionOpen) return; 
+  if((currentMatch.tabellinoFinalizzato===true || tabellinoAutoBloccato(currentMatch)) && !matchStatsExceptionOpen) return; 
   const btn=$('#saveMatchStatsBtn'), rows=[...document.querySelectorAll('#matchStatsList .stats-row[data-stat-player]')];
   if(btn){btn.disabled=true;btn.textContent='⏳ Salvataggio...';}
   try{
@@ -542,6 +575,10 @@ async function saveMatchStats(){
     const awayScore=localIsHome?opponentScore:localScore;
     batch.set(summaryRef,{homeScore,awayScore,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
     await batch.commit();
+    if(matchStatsExceptionOpen){
+      await db.collection('matches').doc(currentMatch.id).update({tabellinoExceptionOpen:false,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      currentMatch.tabellinoExceptionOpen=false;
+    }
     await loadCurrentMatchDetails(currentMatch.id); matchStatsDraftDirty=false; matchStatsExceptionOpen=false; renderMatchStats(); await renderPlayedMatches();
     const msg=$('#matchStatsMsg'); if(msg){ msg.textContent='✅ Tabellino salvato.'; msg.className='success'; }
   }catch(e){
@@ -569,12 +606,23 @@ async function finalizeMatchStats(){
     alert(e.code==='permission-denied'?'❌ Firebase ha rifiutato la finalizzazione. Verifica le Rules.':'❌ Impossibile finalizzare il tabellino.');
   }finally{ if(btn){btn.disabled=false;btn.textContent='✅ Finalizza tabellino';} }
 }
-function openExceptionalStatsEdit(){
-  if(!isAdmin()||!currentMatch||currentMatch.tabellinoFinalizzato!==true||String(currentMatch.status||'')!=='finished') return;
-  const ok=confirm('⚠️ MODIFICA ECCEZIONALE\n\nStai per aprire temporaneamente un tabellino già finalizzato.\nLa partita resterà TERMINATA e la distinta resterà bloccata.\n\nVuoi procedere?');
+async function openExceptionalStatsEdit(){
+  if(!isAdmin()||!currentMatch||String(currentMatch.status||'')!=='finished') return;
+  const locked=currentMatch.tabellinoFinalizzato===true || tabellinoAutoBloccato(currentMatch);
+  if(!locked || currentMatch.tabellinoExceptionOpen===true) return;
+  const ok=confirm('⚠️ MODIFICA ECCEZIONALE\n\nStai per aprire temporaneamente un tabellino già protetto.\nLa partita resterà TERMINATA e la distinta resterà bloccata.\n\nVuoi procedere?');
   if(!ok) return;
-  matchStatsExceptionOpen=true;
-  renderMatchStats();
+  const btn=$('#exceptionalEditStatsBtn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Apertura...';}
+  try{
+    await db.collection('matches').doc(currentMatch.id).update({tabellinoExceptionOpen:true,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    currentMatch.tabellinoExceptionOpen=true;
+    matchStatsExceptionOpen=true;
+    renderMatchStats();
+  }catch(e){
+    console.error('Apertura modifica eccezionale:',e);
+    alert(e.code==='permission-denied'?'❌ Firebase ha rifiutato la modifica eccezionale. Verifica le Rules.':'❌ Impossibile aprire la modifica eccezionale.');
+  }finally{ if(btn){btn.disabled=false;btn.textContent='✏️ Modifica eccezionale';} }
 }
 
 async function loadSeasonStats(){
@@ -731,13 +779,16 @@ function populateVotes(){
 }
 $('#closeVotingBtn')?.addEventListener('click',async()=>{
   if(!isAdmin()||!currentMatch||String(currentMatch.status||'')!=='finished'||!votingWindowOpen(currentMatch)) return;
-  const ok=confirm('⚠️ CHIUDI VOTAZIONI\n\nLa finestra di voto verrà chiusa immediatamente.\nI Player non potranno più votare per questa partita.\nLa partita resterà TERMINATA e il tabellino non verrà modificato.\n\nVuoi procedere?');
+  const ok=confirm('⚠️ CHIUDI VOTAZIONI\n\nLa finestra di voto verrà chiusa immediatamente.\nI Player non potranno più votare per questa partita.\nIl tabellino verrà protetto contestualmente alla chiusura delle votazioni.\n\nVuoi procedere?');
   if(!ok) return;
   const btn=$('#closeVotingBtn'); if(btn){btn.disabled=true;btn.textContent='⏳ Chiusura...';}
   try{
     const data={votingClosed:true,votingClosedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
     await db.collection('matches').doc(currentMatch.id).update(data);
-    Object.assign(currentMatch,{votingClosed:true});
+    if(currentMatch.tabellinoFinalizzato!==true){
+      await db.collection('matches').doc(currentMatch.id).update({tabellinoFinalizzato:true,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    }
+    Object.assign(currentMatch,{votingClosed:true,tabellinoFinalizzato:true});
     renderMatch();
     renderDashboard();
   }catch(e){
@@ -1330,7 +1381,10 @@ function show(id){
   if(id==='players')renderPlayers();
   if(id==='match'){
     renderMatch();
-    if(isAdmin() && currentMatch?.id) updateProgress();
+    if(isAdmin() && currentMatch?.id){
+      void autoFinalizeTabellinoIfNeeded(currentMatch);
+      updateProgress();
+    }
     if(isPlayer() && currentMatch?.id){
       const matchId=currentMatch.id;
       loadOwnVoteState(matchId).then(()=>{
@@ -1351,6 +1405,7 @@ let expiredVoteMatchHandled=null;
 function updateVoteWindowUI(){
   if(!currentMatch) return;
   const open=votingWindowOpen(currentMatch);
+  if(isAdmin() && String(currentMatch.status||'')==='finished') void autoFinalizeTabellinoIfNeeded(currentMatch);
   const started=matchHasStarted(currentMatch);
   const timer=$('#voteTimer');
   if(timer){
