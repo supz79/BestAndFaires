@@ -1,10 +1,12 @@
-/* Best&Faires Beta.7.20.4 - A-16 Countdown prossima partita con secondi */
+/* Best&Faires Beta.7.20.4 - A-21 Voto persistente dopo logout/login */
 
 let players = [];
 let matches = [];
 let currentMatch = null;
 let lineup = [];
 let localVoted = false;
+let localVoteRanking = [];
+let localVoteMatchId = null;
 let calendarDraft = [];
 let currentMatchStats = {};
 let currentMatchSummary = {};
@@ -27,6 +29,9 @@ function resetMatchViewCache(){
   matchDetailsFor = null;
   currentMatch = null;
   lineup = [];
+  localVoted = false;
+  localVoteRanking = [];
+  localVoteMatchId = null;
   if(voteTimer){ clearInterval(voteTimer); voteTimer=null; }
   if(voteProgressTimer){ clearInterval(voteProgressTimer); voteProgressTimer=null; }
   renderMatch._loadedStatsFor = null;
@@ -225,10 +230,12 @@ async function refresh(){
     await loadLeague(); await loadPlayers(); await loadMatches();
     renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar(); await renderAdminPlayers(); await loadPendingRegistrations();
     await syncPublicResultsForAdmin();
-    await renderRanking(); await loadOwnVoteState();
+    await renderRanking();
     // Dopo il login aspettiamo che Firebase Auth abbia una sessione realmente
-    // utilizzabile dalle Firestore Rules, quindi carichiamo il tabellino.
+    // utilizzabile dalle Firestore Rules, quindi carichiamo il tabellino prima
+    // di ricostruire lo stato personale della votazione.
     await loadCurrentMatchDetails(currentMatch?.id);
+    await loadOwnVoteState(currentMatch?.id);
     renderMatch();
     updateProgress();
   }catch(e){ console.error(e); const msg=$('#voteMsg'); if(msg) msg.textContent='❌ Errore nel caricamento dei dati da Firebase.'; }
@@ -598,9 +605,21 @@ $('#lockBtn')?.addEventListener('click',async()=>{
   try{ await db.collection('matches').doc(currentMatch.id).update(data); Object.assign(currentMatch,data); renderMatch(); }
   catch(e){ console.error(e); alert('Firebase ha rifiutato la modifica della distinta.'); }
 });
-async function loadOwnVoteState(){
-  localVoted=false; if(!isPlayer()||!currentMatch) return;
-  try{ const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').doc(uid()).get(); localVoted=snap.exists; }catch(e){console.error(e);}
+async function loadOwnVoteState(matchId=currentMatch?.id){
+  localVoted=false;
+  localVoteRanking=[];
+  localVoteMatchId=matchId || null;
+  if(!isPlayer()||!matchId) return;
+  try{
+    const snap=await db.collection('matches').doc(matchId).collection('votes').doc(uid()).get();
+    if(!snap.exists) return;
+    const data=snap.data()||{};
+    const ranking=Array.isArray(data.ranking) ? data.ranking.map(String) : [];
+    localVoted=true;
+    localVoteRanking = ranking.length===3 && new Set(ranking).size===3 ? ranking : [];
+  }catch(e){
+    console.error('Caricamento stato voto personale:',e);
+  }
 }
 function playerHasMatchPresence(playerId){
   const st=currentMatchStats?.[playerId];
@@ -622,7 +641,9 @@ function populateVotes(){
     const s=$('#vote'+n);
     if(!s) return;
     s.innerHTML='<option value="">Seleziona...</option>'+eligible.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(playerName(p))}</option>`).join('');
-    if(selected[n] && eligible.some(p=>p.id===selected[n])) s.value=selected[n];
+    const persisted=(localVoted && localVoteMatchId===currentMatch?.id) ? localVoteRanking[n-1] : '';
+    const wanted=persisted || selected[n] || '';
+    if(wanted && eligible.some(p=>p.id===wanted)) s.value=wanted;
     s.disabled=localVoted;
   });
   $('#submitVote').disabled=localVoted || eligible.length<3;
@@ -663,6 +684,9 @@ $('#submitVote')?.addEventListener('click',async()=>{
     });
 
     localVoted=true;
+    localVoteRanking=[...ranking];
+    localVoteMatchId=currentMatch.id;
+    populateVotes();
     renderMatch();
     alert('✅ Voto registrato. Grazie!');
   }
@@ -1173,10 +1197,22 @@ function show(id){
     // La Home deve sempre ricalcolare la propria partita principale.
     // Aprire un vecchio match dal Calendario non deve trascinarlo nella Home.
     selectHomeMatch();
-    localVoted=false;
   }
   $$('.screen').forEach(x=>x.classList.remove('active')); $('#'+id)?.classList.add('active');
-  if(id==='ranking')renderRanking(); if(id==='players')renderPlayers(); if(id==='match')renderMatch(); if(id==='calendar')renderCalendar(); if(id==='played')renderPlayedMatches(); if(id==='dashboard')renderDashboard();
+  if(id==='ranking')renderRanking();
+  if(id==='players')renderPlayers();
+  if(id==='match'){
+    renderMatch();
+    if(isPlayer() && currentMatch?.id){
+      const matchId=currentMatch.id;
+      loadOwnVoteState(matchId).then(()=>{
+        if(currentMatch?.id===matchId) renderMatch();
+      });
+    }
+  }
+  if(id==='calendar')renderCalendar();
+  if(id==='played')renderPlayedMatches();
+  if(id==='dashboard')renderDashboard();
 }
 $$('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
 $('#dashboardMatchCard')?.addEventListener('click',()=>{ if(currentMatch) show('match'); });
@@ -1220,7 +1256,7 @@ async function startVoteTimer(){
         await loadMatches();
         if(currentMatch?.id!==expiredId){
           await loadCurrentMatchDetails(currentMatch.id);
-          await loadOwnVoteState();
+          await loadOwnVoteState(currentMatch?.id);
         }
         renderDashboard();
         renderMatch();
@@ -1240,7 +1276,7 @@ async function startVoteTimer(){
             renderDashboard();
           }else{
             await loadCurrentMatchDetails(currentMatch?.id);
-            await loadOwnVoteState();
+            await loadOwnVoteState(currentMatch?.id);
             renderMatch();
           }
         }catch(e){ console.error('Aggiornamento partita allo scadere del countdown:',e); }
