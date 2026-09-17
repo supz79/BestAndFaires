@@ -966,8 +966,35 @@ async function renderRanking(){
   const rows=await calculateRanking();
   const activeTab=document.querySelector('.tab.active')?.dataset.tab || 'day';
   const title=activeTab==='season' ? 'Classifica generale' : `Classifica G${escapeHtml(currentMatch?.giornata||currentMatch?.day||'')}`;
-  const html=rows.map((p,i)=>`<div class="rank"><span class="pos">${i<3?['🥇','🥈','🥉'][i]:i+1}</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${p.first}× 1° · ${p.second}× 2° · ${p.third}× 3°</span></div><span class="points">${p.points} pt</span></div>`).join('');
-  $('#rankingTable').innerHTML=`<div class="sub" style="margin-bottom:14px">${title}</div>`+(html||'<p class="muted">Nessun risultato.</p>');
+  const medalLabels=['🥇','🥈','🥉'];
+
+  if(!rows.length){
+    $('#rankingTable').innerHTML=`<div class="ranking-caption">${title}</div><p class="muted">Nessun risultato.</p>`;
+    return;
+  }
+
+  const podium=rows.slice(0,3).map((p,i)=>`
+    <div class="ranking-podium-item podium-${i+1}">
+      <div class="ranking-medal">${medalLabels[i]}</div>
+      <div class="ranking-podium-name">${escapeHtml(playerName(p))}</div>
+      <div class="ranking-podium-points">${p.points} <span>pt</span></div>
+      <div class="ranking-vote-breakdown"><span>🥇 ${p.first}</span><span>🥈 ${p.second}</span><span>🥉 ${p.third}</span></div>
+    </div>`).join('');
+
+  const rest=rows.slice(3).map((p,i)=>`
+    <div class="ranking-list-row">
+      <span class="ranking-position">${i+4}</span>
+      <div class="ranking-player-info">
+        <b>${escapeHtml(playerName(p))}</b>
+        <span class="ranking-vote-breakdown"><span>🥇 ${p.first}</span><span>🥈 ${p.second}</span><span>🥉 ${p.third}</span></span>
+      </div>
+      <span class="ranking-list-points">${p.points} <small>pt</small></span>
+    </div>`).join('');
+
+  $('#rankingTable').innerHTML=`
+    <div class="ranking-caption">${title}</div>
+    <div class="ranking-podium">${podium}</div>
+    ${rest ? `<div class="ranking-list">${rest}</div>` : ''}`;
 }
 function renderPlayers(){
   $('#playersTable').innerHTML=players.map(p=>`<div class="rank"><span class="pos">⚽</span><div><b>${escapeHtml(playerName(p))}</b><span class="sub">${lineup.includes(p.id)?'In distinta':'Fuori distinta'}</span></div></div>`).join('')||'<p class="muted">Nessun giocatore.</p>';

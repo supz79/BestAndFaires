@@ -552,3 +552,251 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
     text-align:center;
   }
 }
+
+/* A-33.5 - Classifiche: podio + lista compatta, solo grafica */
+#ranking .card{
+  padding:24px 26px;
+}
+
+#ranking .tabs{
+  gap:8px;
+}
+
+#ranking .tab{
+  min-width:120px;
+  font-weight:700;
+  transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease,border-color .15s ease;
+}
+
+#ranking .tab:hover:not(.active){
+  transform:translateY(-1px);
+  border-color:#94a3b8;
+  box-shadow:0 5px 12px rgba(17,24,39,.06);
+}
+
+#ranking .tab.active{
+  box-shadow:0 5px 14px rgba(17,24,39,.12);
+}
+
+.ranking-caption{
+  color:#64748b;
+  font-size:.82rem;
+  font-weight:800;
+  letter-spacing:.02em;
+  margin:2px 0 18px;
+}
+
+.ranking-podium{
+  display:grid;
+  grid-template-columns:1fr 1.12fr 1fr;
+  align-items:end;
+  gap:12px;
+  margin:2px 0 26px;
+}
+
+.ranking-podium-item{
+  position:relative;
+  min-height:172px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-end;
+  text-align:center;
+  padding:18px 12px 16px;
+  border:1px solid #e5e7eb;
+  border-radius:18px;
+  background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);
+  box-shadow:0 5px 16px rgba(17,24,39,.045);
+}
+
+.ranking-podium-item.podium-1{
+  min-height:196px;
+  border-color:#d7dee8;
+  background:linear-gradient(180deg,#ffffff 0%,#f3f6fa 100%);
+  box-shadow:0 10px 24px rgba(17,24,39,.09);
+}
+
+.ranking-medal{
+  position:absolute;
+  top:-18px;
+  left:50%;
+  transform:translateX(-50%);
+  width:48px;
+  height:48px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:#fff;
+  border:1px solid #e5e7eb;
+  box-shadow:0 6px 16px rgba(17,24,39,.10);
+  font-size:25px;
+}
+
+.ranking-podium-name{
+  width:100%;
+  font-size:1rem;
+  font-weight:900;
+  line-height:1.2;
+  margin-top:17px;
+  overflow-wrap:anywhere;
+}
+
+.podium-1 .ranking-podium-name{
+  font-size:1.08rem;
+}
+
+.ranking-podium-points{
+  margin-top:7px;
+  font-size:1.65rem;
+  line-height:1;
+  font-weight:950;
+  color:#111827;
+}
+
+.podium-1 .ranking-podium-points{
+  font-size:1.85rem;
+}
+
+.ranking-podium-points span,
+.ranking-list-points small{
+  font-size:.72em;
+  font-weight:800;
+  color:#64748b;
+}
+
+.ranking-vote-breakdown{
+  display:flex;
+  justify-content:center;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:9px;
+  color:#64748b;
+  font-size:.72rem;
+  font-weight:700;
+}
+
+.ranking-vote-breakdown span{
+  white-space:nowrap;
+}
+
+.ranking-list{
+  border-top:1px solid #e5e7eb;
+}
+
+.ranking-list-row{
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+  padding:14px 4px;
+  border-bottom:1px solid #edf0f2;
+}
+
+.ranking-list-row:last-child{
+  border-bottom:0;
+}
+
+.ranking-position{
+  width:32px;
+  height:32px;
+  display:grid;
+  place-items:center;
+  border:1px solid #e2e8f0;
+  border-radius:10px;
+  background:#f8fafc;
+  color:#475569;
+  font-weight:900;
+  font-size:.88rem;
+}
+
+.ranking-player-info{
+  min-width:0;
+}
+
+.ranking-player-info b{
+  display:block;
+  font-size:1rem;
+  line-height:1.2;
+}
+
+.ranking-player-info .ranking-vote-breakdown{
+  justify-content:flex-start;
+  margin-top:4px;
+}
+
+.ranking-list-points{
+  min-width:64px;
+  text-align:right;
+  font-size:1.1rem;
+  font-weight:950;
+  white-space:nowrap;
+}
+
+@media(max-width:650px){
+  #ranking .card{
+    padding:20px 16px;
+  }
+
+  #ranking .tabs .tab{
+    flex:1;
+    min-width:0;
+  }
+
+  .ranking-podium{
+    grid-template-columns:1fr 1.08fr 1fr;
+    gap:7px;
+    margin-bottom:22px;
+  }
+
+  .ranking-podium-item{
+    min-height:150px;
+    padding:15px 7px 13px;
+    border-radius:15px;
+  }
+
+  .ranking-podium-item.podium-1{
+    min-height:174px;
+  }
+
+  .ranking-medal{
+    width:40px;
+    height:40px;
+    top:-15px;
+    font-size:21px;
+  }
+
+  .ranking-podium-name,
+  .podium-1 .ranking-podium-name{
+    font-size:.84rem;
+  }
+
+  .ranking-podium-points,
+  .podium-1 .ranking-podium-points{
+    font-size:1.35rem;
+  }
+
+  .ranking-vote-breakdown{
+    gap:4px;
+    font-size:.64rem;
+  }
+
+  .ranking-list-row{
+    grid-template-columns:36px minmax(0,1fr) auto;
+    gap:9px;
+    padding:13px 2px;
+  }
+
+  .ranking-position{
+    width:30px;
+    height:30px;
+  }
+
+  .ranking-player-info b{
+    font-size:.92rem;
+  }
+
+  .ranking-list-points{
+    min-width:54px;
+    font-size:1rem;
+  }
+}
