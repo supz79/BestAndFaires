@@ -113,7 +113,14 @@ function formatDate(d){ return d ? d.toLocaleDateString('it-IT',{day:'2-digit',m
 function formatDateTime(d){ return d ? d.toLocaleString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : ''; }
 function formatDateOnly(d){ return d ? d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'}) : ''; }
 function statusLabel(s){ return ({scheduled:'PROGRAMMATA',voting_open:'VOTAZIONE APERTA',in_progress:'IN CORSO',finished:'TERMINATA',postponed:'RINVIATA',cancelled:'ANNULLATA'}[s] || String(s||'PROGRAMMATA').toUpperCase()); }
-function statusClass(s){ return s==='voting_open'?'open':(s==='postponed'?'warn':(s==='cancelled'?'closed':'')); }
+function statusClass(s){
+  return s==='voting_open'?'open':
+    (s==='postponed'?'warn':
+    (s==='cancelled'?'closed':
+    (s==='finished'?'status-finished':
+    (s==='scheduled'?'status-scheduled':
+    (s==='in_progress'?'status-in-progress':''))));
+}
 
 async function loadPlayers(){
   const snap = await db.collection('players').where('leagueId','==',leagueId()).get();

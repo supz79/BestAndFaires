@@ -454,3 +454,101 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
   }
 }
 
+
+
+/* ============================================================
+   A-33.4 · CALENDARIO — TOOLBAR + STATI
+   Grafica/UX. Logica invariata.
+   ============================================================ */
+
+/* Blocco superiore del Calendario */
+#calendar .calendar-toolbar{
+  align-items:center;
+  gap:20px;
+}
+
+#calendar .calendar-toolbar > div{
+  min-width:0;
+}
+
+#calendar .calendar-toolbar h3{
+  margin:0;
+}
+
+#calendar .calendar-toolbar p{
+  margin:7px 0 0;
+  max-width:900px;
+  line-height:1.45;
+}
+
+#calendar #newMatchBtn{
+  flex:0 0 auto;
+  min-width:150px;
+  padding:12px 18px;
+  border-radius:14px;
+  line-height:1.2;
+}
+
+#calendar .import-box{
+  margin-top:20px;
+  padding:12px 14px;
+  border-radius:14px;
+  background:#fbfcfd;
+}
+
+#calendar .import-box .file-btn{
+  padding:11px 16px;
+  border-radius:11px;
+  white-space:nowrap;
+}
+
+#calendar .import-box > .muted{
+  line-height:1.4;
+}
+
+/* Badge stato partite: semantica cromatica immediata */
+#calendarList .calendar-row .pill.status-finished{
+  background:#fee2e2;
+  color:#b91c1c;
+  border:1px solid #fecaca;
+}
+
+#calendarList .calendar-row .pill.status-scheduled{
+  background:#fef3c7;
+  color:#a16207;
+  border:1px solid #fde68a;
+}
+
+#calendarList .calendar-row .pill.status-in-progress{
+  background:#dcfce7;
+  color:#15803d;
+  border:1px solid #bbf7d0;
+}
+
+#calendarList .calendar-row .pill.open{
+  background:#dcfce7;
+  color:#15803d;
+  border:1px solid #bbf7d0;
+}
+
+@media(max-width:650px){
+  #calendar .calendar-toolbar{
+    align-items:stretch;
+    gap:14px;
+  }
+
+  #calendar #newMatchBtn{
+    width:100%;
+  }
+
+  #calendar .import-box{
+    align-items:stretch;
+    flex-direction:column;
+  }
+
+  #calendar .import-box .file-btn{
+    width:100%;
+    box-sizing:border-box;
+    text-align:center;
+  }
+}
