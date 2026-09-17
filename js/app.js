@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.20.4 - A-24 Conteggio voti Admin sincronizzato */
+/* Best&Faires Beta.7.20.4 - A-25 Partite disputate compatte */
 
 let players = [];
 let matches = [];
@@ -111,6 +111,7 @@ function currentPlayer(){
 function currentPlayerInLineup(){ const p=currentPlayer(); return !!p && lineup.includes(p.id); }
 function formatDate(d){ return d ? d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'}) : ''; }
 function formatDateTime(d){ return d ? d.toLocaleString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : ''; }
+function formatDateOnly(d){ return d ? d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'}) : ''; }
 function statusLabel(s){ return ({scheduled:'PROGRAMMATA',voting_open:'VOTAZIONE APERTA',in_progress:'IN CORSO',finished:'TERMINATA',postponed:'RINVIATA',cancelled:'ANNULLATA'}[s] || String(s||'PROGRAMMATA').toUpperCase()); }
 function statusClass(s){ return s==='voting_open'?'open':(s==='postponed'?'warn':(s==='cancelled'?'closed':'')); }
 
@@ -311,33 +312,93 @@ async function loadPublicMatchResults(matchId){
   return totals;
 }
 async function renderPlayedMatches(){
-  const box=$('#playedMatchesList'); if(!box) return;
-  const finished=matches.filter(m=>String(m.status||'')==='finished').sort((a,b)=>(parseDateTime(b)?.getTime()||0)-(parseDateTime(a)?.getTime()||0));
-  if(!finished.length){ box.innerHTML='<div class="card"><p class="muted">Nessuna partita disputata ancora.</p></div>'; return; }
-  box.innerHTML="<div class='card'><p class='muted'>Qui trovi il riepilogo delle partite terminate. I voti individuali restano segreti; sono visibili solo i risultati aggregati e l'MVP.</p></div>"+finished.map(m=>`<div class="card played-match-card" data-played-match="${escapeHtml(m.id)}"><div class="played-match-head"><div><span class="eyebrow">${escapeHtml(m.fase||'')} · G${escapeHtml(m.giornata||m.day||'')}</span><h3>${escapeHtml(m.homeTeam||leagueTeam())} <span class="score-placeholder">vs</span> ${escapeHtml(m.awayTeam||m.opponent||'Avversario')}</h3><small>${formatDateTime(parseDateTime(m))}</small></div><span class="pill closed">TERMINATA</span></div><div class="played-match-body"><span>Caricamento riepilogo...</span></div></div>`).join('');
-  for(const m of finished){
-    const card=box.querySelector(`[data-played-match="${CSS.escape(m.id)}"]`); if(!card) continue;
-    const body=card.querySelector('.played-match-body');
+  const box=$('#playedMatchesList');
+  if(!box) return;
+  const finished=matches
+    .filter(m=>String(m.status||'')==='finished')
+    .sort((a,b)=>(parseDateTime(b)?.getTime()||0)-(parseDateTime(a)?.getTime()||0));
+
+  if(!finished.length){
+    box.innerHTML='<div class="card"><p class="muted">Nessuna partita disputata ancora.</p></div>';
+    return;
+  }
+
+  // Vista compatta: inizialmente viene mostrata solo una riga per partita.
+  // Il dettaglio completo viene caricato e aperto solo al click sulla singola partita.
+  box.innerHTML=`<div class="card"><p class="muted">Clicca su una partita per aprire il risultato completo, le statistiche e l\'MVP.</p></div>`+
+    finished.map(m=>{
+      const phase=String(m.fase||'Andata');
+      const round=m.giornata||m.day||'';
+      const when=formatDateOnly(parseDateTime(m));
+      const home=m.homeTeam||leagueTeam();
+      const away=m.awayTeam||m.opponent||'Avversario';
+      return `<div class="played-match-accordion" data-played-match="${escapeHtml(m.id)}">
+        <button type="button" class="played-match-summary" aria-expanded="false">
+          <span class="played-match-summary-text">
+            <b>${escapeHtml(when)}</b>
+            <span class="played-match-dot">·</span>
+            <span>${escapeHtml(phase)}</span>
+            ${round?`<span class="played-match-dot">·</span><span>G${escapeHtml(round)}</span>`:''}
+            <span class="played-match-dot">·</span>
+            <span>${escapeHtml(home)} vs ${escapeHtml(away)}</span>
+          </span>
+          <span class="played-match-chevron" aria-hidden="true">⌄</span>
+        </button>
+        <div class="played-match-body" hidden><span class="muted">Caricamento riepilogo...</span></div>
+      </div>`;
+    }).join('');
+}
+
+async function loadPlayedMatchDetails(matchId, card){
+  if(!matchId||!card) return;
+  const m=matches.find(x=>x.id===matchId);
+  const body=card.querySelector('.played-match-body');
+  if(!m||!body) return;
+  if(card.dataset.loaded==='1') return;
+
+  body.innerHTML='<span class="muted">Caricamento riepilogo...</span>';
+  try{
     const [sumSnap,statsSnap,results]=await Promise.all([
       db.collection('matches').doc(m.id).collection('summary').doc('main').get().catch(()=>null),
       db.collection('matches').doc(m.id).collection('stats').get().catch(()=>null),
       loadPublicMatchResults(m.id)
     ]);
+
     const summary=sumSnap?.exists?(sumSnap.data()||{}):{};
-    const statMap={}; statsSnap?.forEach(d=>statMap[d.id]=d.data()||{});
+    const statMap={};
+    statsSnap?.forEach(d=>{ statMap[d.id]=d.data()||{}; });
     const played=Object.keys(statMap).filter(id=>statMap[id].appearance===1||statMap[id].appearance===true);
     const ranked=Object.entries(results).sort((a,b)=>(b[1].points||0)-(a[1].points||0)||(b[1].first||0)-(a[1].first||0)||(b[1].second||0)-(a[1].second||0)||(b[1].third||0)-(a[1].third||0));
     const top=ranked.filter(([,r])=>(r.points||0)>0);
     const mvp=top.length?players.find(p=>p.id===top[0][0]):null;
     const tie=top.length>1 && (top[1][1].points||0)===(top[0][1].points||0) && (top[1][1].first||0)===(top[0][1].first||0) && (top[1][1].second||0)===(top[0][1].second||0) && (top[1][1].third||0)===(top[0][1].third||0);
-    const mvpText=mvp?(tie?`⭐ MVP ex aequo: <b>${escapeHtml(playerName(mvp))}</b> e <b>${escapeHtml(playerName(players.find(p=>p.id===top[1][0])||{}))}</b>`:`⭐ MVP: <b>${escapeHtml(playerName(mvp))}</b> <span class="sub">${top[0][1].points||0} pt</span>`):'⭐ MVP: non disponibile';
-    const rows=played.map(id=>{const p=players.find(x=>x.id===id); if(!p)return ''; const st=statMap[id]||{}; const r=results[id]||{}; return `<div class="played-player-row"><b>${escapeHtml(playerName(p))}</b><span>⚽ ${statNum(st.goals)}</span><span>🎯 ${statNum(st.assists)}</span><span>🟨 ${statNum(st.yellow)}</span><span>🟥 ${statNum(st.red)}</span><span>⭐ ${statNum(r.points)} pt</span></div>`;}).join('');
+    const mvpText=mvp
+      ? (tie
+        ? `⭐ MVP ex aequo: <b>${escapeHtml(playerName(mvp))}</b> e <b>${escapeHtml(playerName(players.find(p=>p.id===top[1][0])||{}))}</b>`
+        : `⭐ MVP: <b>${escapeHtml(playerName(mvp))}</b> <span class="sub">${top[0][1].points||0} pt</span>`)
+      : '⭐ MVP: non disponibile';
+    const rows=played.map(id=>{
+      const p=players.find(x=>x.id===id); if(!p) return '';
+      const st=statMap[id]||{}; const r=results[id]||{};
+      return `<div class="played-player-row"><b>${escapeHtml(playerName(p))}</b><span>⚽ ${statNum(st.goals)}</span><span>🎯 ${statNum(st.assists)}</span><span>🟨 ${statNum(st.yellow)}</span><span>🟥 ${statNum(st.red)}</span><span>⭐ ${statNum(r.points)} pt</span></div>`;
+    }).join('');
     const scorers=[];
-    played.forEach(id=>{ const p=players.find(x=>x.id===id); const st=statMap[id]||{}; if(!p) return; for(let i=0;i<statNum(st.goals);i++) scorers.push(playerName(p)); });
-    const scorersText=scorers.length ? `<div class="scorers-line"><b>⚽ Marcatori:</b> ${scorers.map(n=>escapeHtml(n)).join(', ')}</div>` : '';
+    played.forEach(id=>{
+      const p=players.find(x=>x.id===id); const st=statMap[id]||{}; if(!p) return;
+      for(let i=0;i<statNum(st.goals);i++) scorers.push(playerName(p));
+    });
+    const scorersText=scorers.length
+      ? `<div class="scorers-line"><b>⚽ Marcatori:</b> ${scorers.map(n=>escapeHtml(n)).join(', ')}</div>`
+      : '';
+
     body.innerHTML=`<div class="played-score">${matchScoreText(m,summary)}</div>${scorersText}<div class="mvp-box">${mvpText}</div><div class="played-stats"><div class="played-player-row played-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span><span>Voto</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}</div>`;
+    card.dataset.loaded='1';
+  }catch(e){
+    console.error('Dettaglio partita disputata:',e);
+    body.innerHTML='<p class="muted">Impossibile caricare il riepilogo della partita.</p>';
   }
 }
+
 
 async function loadMatchStats(matchId=currentMatch?.id){
   currentMatchStats={};
@@ -1185,6 +1246,18 @@ async function commitImport(){
     $('#importPreviewCard').classList.add('hidden'); $('#excelInput').value=''; await loadMatches(); renderCalendar(); renderMatch(); setCalendarMessage(`✅ Importazione completata: ${created} nuove, ${updated} aggiornate.`,true);
   }catch(e){console.error(e);alert(e.message.startsWith('La partita')?`❌ ${e.message}`:'❌ Importazione non completata. Nessuna garanzia di rollback automatico.');}
 }
+
+$('#playedMatchesList')?.addEventListener('click',e=>{
+  const btn=e.target.closest('.played-match-summary');
+  if(!btn) return;
+  const card=btn.closest('.played-match-accordion');
+  const body=card?.querySelector('.played-match-body');
+  if(!card||!body) return;
+  const open=card.classList.toggle('is-open');
+  btn.setAttribute('aria-expanded',String(open));
+  body.hidden=!open;
+  if(open && card.dataset.loaded!=='1') loadPlayedMatchDetails(card.dataset.playedMatch,card);
+});
 
 $('#calendarList')?.addEventListener('click',e=>{
   const statsBtn=e.target.closest('.stats-match');
