@@ -1232,3 +1232,197 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
     font-size:1.6rem;
   }
 }
+
+
+/* A-33.8 - Amministrazione: linguaggio grafico uniforme, solo presentazione. */
+#admin .card{
+  padding:24px 26px;
+  border-radius:20px;
+}
+#admin .card h3{
+  margin:0 0 14px;
+  font-size:19px;
+}
+#admin .card > .muted{
+  margin:0 0 16px;
+  line-height:1.55;
+}
+#admin .rule{
+  min-height:46px;
+  align-items:center;
+  padding:10px 2px;
+  border-bottom:1px solid #edf0f3;
+}
+#admin .rule b{
+  font-size:.94rem;
+}
+#admin .rule span{
+  color:#475569;
+  font-size:.9rem;
+  text-align:right;
+}
+#admin #recalculateResultsBtn{
+  margin-top:2px;
+}
+#admin .form-grid{
+  gap:14px 18px;
+  align-items:end;
+  margin-top:6px;
+}
+#admin .form-grid label{
+  margin:0;
+}
+#admin .form-grid input{
+  width:100%;
+  margin-top:7px;
+  padding:11px 12px;
+  border:1px solid #cbd5e1;
+  border-radius:10px;
+  background:#fff;
+  color:#111827;
+  font:inherit;
+  outline:none;
+}
+#admin .form-grid input:focus{
+  border-color:#94a3b8;
+  box-shadow:0 0 0 3px rgba(148,163,184,.18);
+}
+#admin .form-grid .modal-actions{
+  margin-top:0;
+  align-self:end;
+}
+#admin .pending-user,
+#admin .admin-user-row{
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr) auto;
+  gap:12px;
+  align-items:center;
+  padding:14px 2px;
+  border-bottom:1px solid #edf0f3;
+}
+#admin .admin-user-row:last-child{
+  border-bottom:0;
+}
+#admin .admin-avatar{
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  border:1px solid #dbe3ea;
+  border-radius:50%;
+  background:#f8fafc;
+  color:#0f172a;
+  font-size:.72rem;
+  font-weight:900;
+  letter-spacing:.02em;
+}
+#admin .admin-user-main{
+  min-width:0;
+}
+#admin .admin-user-main b{
+  display:block;
+  font-size:.96rem;
+  line-height:1.25;
+}
+#admin .admin-account{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:5px;
+  margin-top:4px;
+}
+#admin .admin-status{
+  font-size:.72rem;
+  font-weight:800;
+  white-space:nowrap;
+}
+#admin .admin-status.associated{
+  color:#15803d;
+}
+#admin .admin-status.pending{
+  color:#c2410c;
+}
+#admin .admin-email{
+  color:#64748b;
+  font-size:.72rem;
+  word-break:break-word;
+}
+#admin .admin-user-action{
+  justify-self:end;
+}
+#admin .admin-user-action .small-btn{
+  white-space:nowrap;
+  padding:9px 11px;
+  font-size:.82rem;
+}
+#admin .small-action{
+  margin-left:0;
+  white-space:nowrap;
+}
+#admin .admin-section-note{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+#admin .admin-section-note::before{
+  content:'';
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#cbd5e1;
+  flex:0 0 auto;
+}
+
+@media(max-width:650px){
+  #admin .card{
+    padding:20px 16px;
+    border-radius:18px;
+  }
+  #admin .rule{
+    min-height:0;
+    gap:12px;
+  }
+  #admin .rule b{
+    flex:1 1 auto;
+  }
+  #admin .rule span{
+    flex:0 0 auto;
+    max-width:48%;
+  }
+  #admin .form-grid{
+    grid-template-columns:1fr;
+  }
+  #admin .form-grid .modal-actions{
+    grid-column:1 / -1 !important;
+    justify-content:stretch;
+  }
+  #admin .form-grid .modal-actions .primary{
+    width:100%;
+  }
+  #admin .pending-user,
+  #admin .admin-user-row{
+    grid-template-columns:38px minmax(0,1fr);
+    gap:10px;
+    padding:13px 0;
+  }
+  #admin .admin-avatar{
+    width:36px;
+    height:36px;
+  }
+  #admin .admin-user-action,
+  #admin .pending-user .small-action{
+    grid-column:2;
+    justify-self:start;
+    margin-top:2px;
+  }
+  #admin .pending-user .small-action{
+    width:100%;
+  }
+  #admin .admin-user-action .small-btn{
+    width:100%;
+  }
+  #admin .admin-email{
+    display:block;
+    width:100%;
+  }
+}
