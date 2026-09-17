@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0d6b32">
   <meta name="description" content="Best&Faires - il voto ai migliori in campo">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="css/style.css?v=7.31">
+  <link rel="stylesheet" href="css/style.css?v=7.32">
   <title>Best&Faires</title>
 </head>
 <body>
@@ -134,6 +134,18 @@
       <label>🥉 3° posto <select id="vote3"></select></label>
       <button id="submitVote" class="primary">Conferma voto</button>
       <p id="voteMsg" class="success"></p>
+    </div>
+
+    <div id="adminVotingCard" class="card admin-only hidden">
+      <span class="eyebrow">GESTIONE VOTAZIONE</span>
+      <h3>Votazione post-partita</h3>
+      <p class="muted">L’Admin può chiudere anticipatamente la finestra di voto, senza modificare lo stato della partita.</p>
+      <div id="adminVoteTimer" class="pill open">⏱️ Tempo per votare: --</div>
+      <small id="adminVoteCount" class="muted">0 / 0 giocatori hanno votato</small>
+      <div class="modal-actions" style="margin-top:14px;">
+        <button id="closeVotingBtn" class="danger-btn" type="button">🔒 Chiudi votazioni</button>
+      </div>
+      <p id="adminVoteMsg" class="success"></p>
     </div>
   </section>
 

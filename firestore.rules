@@ -287,6 +287,24 @@ service cloud.firestore {
                    'updatedAt'
                  ])
           )
+
+          ||
+
+          // -----------------------------------------------
+          // CHIUSURA ANTICIPATA DELLA VOTAZIONE
+          // -----------------------------------------------
+          (
+            resource.data.status == 'finished'
+            && request.resource.data.votingClosed == true
+            && (!('votingClosed' in resource.data) || resource.data.votingClosed != true)
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys()
+                 .hasOnly([
+                   'votingClosed',
+                   'votingClosedAt',
+                   'updatedAt'
+                 ])
+          )
         );
 
 

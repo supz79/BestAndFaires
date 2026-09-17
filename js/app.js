@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.20.4 - A-21 Voto persistente dopo logout/login */
+/* Best&Faires Beta.7.20.4 - A-23 Chiusura anticipata votazioni */
 
 let players = [];
 let matches = [];
@@ -88,6 +88,7 @@ function matchEndDate(m=currentMatch){
 function votingDeadlineDate(m=currentMatch){ const end=matchEndDate(m); return end ? new Date(end.getTime()+6*60*60*1000) : null; }
 function votingWindowOpen(m=currentMatch){
   if(!m || String(m.status||'')!=='finished') return false;
+  if(m.votingClosed===true) return false;
   if(!m.finishedAt) return false;
   const deadline=votingDeadlineDate(m);
   return !!deadline && Date.now() <= deadline.getTime();
@@ -577,8 +578,24 @@ function renderMatch(){
   const timer=$('#voteTimer');
   if(timer){
     if(isPlayer() && votingWindowOpen(currentMatch)) { timer.textContent=`⏱️ Tempo per votare: ${formatCountdown(votingRemainingMs(currentMatch))}`; timer.className='pill open'; }
-    else if(isPlayer() && matchHasStarted()) { timer.textContent='⏱️ Finestra di voto scaduta'; timer.className='pill closed'; }
+    else if(isPlayer() && matchHasStarted()) { timer.textContent=currentMatch.votingClosed===true ? '🔒 Votazioni chiuse dall’Admin' : '⏱️ Finestra di voto scaduta'; timer.className='pill closed'; }
     else timer.textContent='⏱️ Il voto sarà disponibile dopo l’inizio della partita';
+  }
+
+  const adminVoteCard=$('#adminVotingCard');
+  if(adminVoteCard){
+    const showAdmin = isAdmin() && String(currentMatch.status||'')==='finished' && votingWindowOpen(currentMatch);
+    adminVoteCard.classList.toggle('hidden', !showAdmin);
+    adminVoteCard.classList.toggle('admin-only', false);
+    const at=$('#adminVoteTimer');
+    if(at){
+      at.textContent = showAdmin ? `⏱️ Tempo residuo: ${formatCountdown(votingRemainingMs(currentMatch))}` : (currentMatch.votingClosed===true ? '🔒 Votazioni chiuse dall’Admin' : '');
+      at.className = showAdmin ? 'pill open' : 'pill closed';
+    }
+    const cb=$('#closeVotingBtn');
+    if(cb){ cb.disabled=!showAdmin; cb.textContent=currentMatch.votingClosed===true ? '🔒 Votazioni chiuse' : '🔒 Chiudi votazioni'; }
+    const msg=$('#adminVoteMsg');
+    if(msg) msg.textContent=currentMatch.votingClosed===true ? '✅ La finestra di voto è stata chiusa.' : '';
   }
   // A-06: updateProgress non viene più richiamata dal render del tabellino.
   // Il render gira ogni secondo per il timer e non deve generare una query
@@ -651,6 +668,24 @@ function populateVotes(){
   else if(eligible.length<3) $('#voteMsg').textContent='⚠️ Servono almeno 3 giocatori con Presenza registrata per poter votare.';
   else $('#voteMsg').textContent='';
 }
+$('#closeVotingBtn')?.addEventListener('click',async()=>{
+  if(!isAdmin()||!currentMatch||String(currentMatch.status||'')!=='finished'||!votingWindowOpen(currentMatch)) return;
+  const ok=confirm('⚠️ CHIUDI VOTAZIONI\n\nLa finestra di voto verrà chiusa immediatamente.\nI Player non potranno più votare per questa partita.\nLa partita resterà TERMINATA e il tabellino non verrà modificato.\n\nVuoi procedere?');
+  if(!ok) return;
+  const btn=$('#closeVotingBtn'); if(btn){btn.disabled=true;btn.textContent='⏳ Chiusura...';}
+  try{
+    const data={votingClosed:true,votingClosedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+    await db.collection('matches').doc(currentMatch.id).update(data);
+    Object.assign(currentMatch,{votingClosed:true});
+    renderMatch();
+    renderDashboard();
+  }catch(e){
+    console.error('Chiusura anticipata votazioni:',e);
+    alert(e.code==='permission-denied' ? '❌ Firebase ha rifiutato la chiusura delle votazioni. Verifica le Rules.' : '❌ Impossibile chiudere le votazioni.');
+    if(btn){btn.disabled=false;btn.textContent='🔒 Chiudi votazioni';}
+  }
+});
+
 $('#submitVote')?.addEventListener('click',async()=>{
   if(!isPlayer()||!currentMatch||!votingWindowOpen(currentMatch)||!currentPlayerInLineup()||localVoted) return;
   const ranking=[1,2,3].map(n=>$('#vote'+n).value), me=currentPlayer();
@@ -1230,12 +1265,21 @@ function updateVoteWindowUI(){
       timer.textContent=`⏱️ Tempo per votare: ${formatCountdown(votingRemainingMs(currentMatch))}`;
       timer.className='pill open';
     }else if(isPlayer() && started){
-      timer.textContent='⏱️ Finestra di voto terminata';
+      timer.textContent=currentMatch.votingClosed===true ? '🔒 Votazioni chiuse dall’Admin' : '⏱️ Finestra di voto terminata';
       timer.className='pill closed';
     }else if(!started){
       timer.textContent='⏱️ Il voto sarà disponibile dopo l’inizio della partita';
       timer.className='pill';
     }
+  }
+  const adminCard=$('#adminVotingCard');
+  if(adminCard){
+    const showAdmin=isAdmin()&&String(currentMatch.status||'')==='finished'&&open;
+    adminCard.classList.toggle('hidden',!showAdmin);
+    const at=$('#adminVoteTimer');
+    if(at){ at.textContent=showAdmin?`⏱️ Tempo residuo: ${formatCountdown(votingRemainingMs(currentMatch))}`:(currentMatch.votingClosed===true?'🔒 Votazioni chiuse dall’Admin':''); at.className=showAdmin?'pill open':'pill closed'; }
+    const cb=$('#closeVotingBtn');
+    if(cb){ cb.disabled=!showAdmin; }
   }
   renderDashboard();
 }
