@@ -119,7 +119,7 @@ function statusClass(s){
     (s==='cancelled'?'closed':
     (s==='finished'?'status-finished':
     (s==='scheduled'?'status-scheduled':
-    (s==='in_progress'?'status-in-progress':''))));
+    (s==='in_progress'?'status-in-progress':'')))));
 }
 
 async function loadPlayers(){
