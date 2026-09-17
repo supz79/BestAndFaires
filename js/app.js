@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.20.4 - A-16 Countdown prossima partita */
+/* Best&Faires Beta.7.20.4 - A-16 Countdown prossima partita con secondi */
 
 let players = [];
 let matches = [];
@@ -89,7 +89,7 @@ function votingWindowOpen(m=currentMatch){
 }
 function votingRemainingMs(m=currentMatch){ const d=votingDeadlineDate(m); return d ? Math.max(0,d.getTime()-Date.now()) : 0; }
 function formatCountdown(ms){ const total=Math.floor(Math.max(0,ms)/1000); const days=Math.floor(total/86400); const h=Math.floor(total%86400/3600); const min=Math.floor(total%3600/60); const sec=total%60; return `${days}g ${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
-function formatNextMatchCountdown(ms){ const total=Math.max(0,Math.floor(ms/1000)); const days=Math.floor(total/86400); const h=Math.floor(total%86400/3600); const min=Math.floor(total%3600/60); return `${String(days).padStart(2,'0')} gg : ${String(h).padStart(2,'0')} hh : ${String(min).padStart(2,'0')} mm`; }
+function formatNextMatchCountdown(ms){ const total=Math.max(0,Math.floor(ms/1000)); const days=Math.floor(total/86400); const h=Math.floor(total%86400/3600); const min=Math.floor(total%3600/60); const sec=total%60; return `${String(days).padStart(2,'0')} gg : ${String(h).padStart(2,'0')} hh : ${String(min).padStart(2,'0')} mm : ${String(sec).padStart(2,'0')} ss`; }
 function isLineupLocked(){
   if (!currentMatch) return true;
   if (String(currentMatch.status||'')==='finished') return true;
