@@ -159,3 +159,96 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
   .played-match-summary-text{display:block;line-height:1.45}
   .played-match-dot{display:inline-block;margin:0 3px}
 }
+
+
+/* ============================================================
+   A-31 GRAPHIC TEST
+   Presentation-only overrides. No application logic changed.
+   ============================================================ */
+
+/* League header: stronger visual hierarchy */
+.league-header,
+header.league-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.08);
+}
+
+.league-header::after,
+header.league-header::after {
+  content: "";
+  position: absolute;
+  right: -55px;
+  top: -75px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: var(--league-primary-soft, rgba(0,0,0,.04));
+  pointer-events: none;
+}
+
+/* Make the main match area visually dominant where supported */
+.match-card,
+.current-match,
+.next-match-card,
+#currentMatchCard {
+  border-radius: 22px;
+  box-shadow: 0 12px 34px rgba(0,0,0,.10);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.match-card:hover,
+.current-match:hover,
+.next-match-card:hover,
+#currentMatchCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 38px rgba(0,0,0,.13);
+}
+
+/* Dashboard cards/buttons */
+.menu-card,
+.dashboard-card,
+.home-card,
+.action-card,
+.menu-grid > *,
+.dashboard-grid > * {
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+.menu-card:hover,
+.dashboard-card:hover,
+.home-card:hover,
+.action-card:hover,
+.menu-grid > *:hover,
+.dashboard-grid > *:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 9px 24px rgba(0,0,0,.08);
+  border-color: var(--league-primary, currentColor);
+}
+
+/* Improve touch targets without changing layout logic */
+button,
+.menu-card,
+.dashboard-card,
+.home-card,
+.action-card {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mobile refinement */
+@media (max-width: 640px) {
+  .league-header,
+  header.league-header {
+    border-radius: 18px;
+    padding: 18px;
+  }
+
+  .match-card,
+  .current-match,
+  .next-match-card,
+  #currentMatchCard {
+    border-radius: 18px;
+  }
+}
