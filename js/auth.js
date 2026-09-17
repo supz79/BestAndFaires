@@ -15,11 +15,16 @@ const sessionBoot = document.querySelector('#sessionBoot');
 function hideSessionBoot(){ sessionBoot?.classList.remove('active'); }
 
 async function showAuthenticatedArea(userData) {
-  hideSessionBoot();
+  // Mantieni la schermata di avvio visibile finché Home e dati iniziali
+  // non sono stati caricati. In caso di errore, il catch dell'Auth mostrerà
+  // il login evitando una pagina completamente vuota.
   window.currentUserData = userData;
-  if (typeof window.applyRolePermissions === 'function') await window.applyRolePermissions(userData);
+  if (typeof window.applyRolePermissions === 'function') {
+    await window.applyRolePermissions(userData);
+  }
   document.querySelectorAll('.screen').forEach(x => x.classList.remove('active'));
   dashboardScreen.classList.add('active');
+  hideSessionBoot();
   const name = userData?.nome || userData?.displayName || firebase.auth().currentUser?.email || 'Utente';
   roleBtn.textContent = userData?.role === 'admin' ? 'Admin · Esci' : `${name} · Esci`;
 }
