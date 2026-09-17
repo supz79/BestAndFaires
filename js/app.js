@@ -387,7 +387,7 @@ async function loadPlayedMatchDetails(matchId, card){
     const rows=played.map(id=>{
       const p=players.find(x=>x.id===id); if(!p) return '';
       const st=statMap[id]||{}; const r=results[id]||{};
-      return `<div class="played-player-row"><b>${escapeHtml(playerName(p))}</b><span>⚽ ${statNum(st.goals)}</span><span>🎯 ${statNum(st.assists)}</span><span>🟨 ${statNum(st.yellow)}</span><span>🟥 ${statNum(st.red)}</span><span>⭐ ${statNum(r.points)} pt</span></div>`;
+      return `<div class="played-player-row"><b>${escapeHtml(playerName(p))}</b><span>${statNum(st.goals)}</span><span>${statNum(st.assists)}</span><span>${statNum(st.yellow)}</span><span>${statNum(st.red)}</span><span>${statNum(r.points)} pt</span></div>`;
     }).join('');
     const scorers=[];
     played.forEach(id=>{
