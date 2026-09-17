@@ -1259,7 +1259,7 @@ $('#playedMatchesList')?.addEventListener('click',e=>{
   if(open && card.dataset.loaded!=='1') loadPlayedMatchDetails(card.dataset.playedMatch,card);
 });
 
-$('#calendarList')?.addEventListener('click',e=>{
+$('#calendarList')?.addEventListener('click',async e=>{
   const statsBtn=e.target.closest('.stats-match');
   if(statsBtn&&isAdmin()){
     const m=matches.find(x=>x.id===statsBtn.dataset.id);
