@@ -305,6 +305,24 @@ service cloud.firestore {
                    'updatedAt'
                  ])
           )
+
+
+          ||
+
+          // -----------------------------------------------
+          // FINALIZZAZIONE DEL TABELLINO
+          // -----------------------------------------------
+          (
+            resource.data.status == 'finished'
+            && request.resource.data.tabellinoFinalizzato == true
+            && (!('tabellinoFinalizzato' in resource.data) || resource.data.tabellinoFinalizzato != true)
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys()
+                 .hasOnly([
+                   'tabellinoFinalizzato',
+                   'updatedAt'
+                 ])
+          )
         );
 
 
