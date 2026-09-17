@@ -121,11 +121,18 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 }
 
 
-/* A-20 - avvio sessione: evita il flash della schermata Login durante il refresh */
-.session-boot{min-height:55vh;align-items:center;justify-content:center;}
+/* A-20 - avvio sessione: splash visivo durante il ripristino della sessione */
+.session-boot{min-height:calc(100vh - 82px);display:none;align-items:center;justify-content:center;padding:24px 16px;background:linear-gradient(145deg,#f8fffb 0%,#eef9f2 48%,#ffffff 100%);}
 .session-boot.active{display:flex;}
-.session-boot-card{width:min(420px,92vw);background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:28px 24px;text-align:center;box-shadow:0 12px 30px rgba(17,24,39,.08);}
-.session-boot-logo{display:block;width:min(300px,80%);height:auto;margin:0 auto 18px;object-fit:contain;}
-.session-spinner{width:28px;height:28px;margin:0 auto 12px;border:3px solid #d1d5db;border-top-color:var(--league-primary,#159447);border-radius:50%;animation:sessionSpin .8s linear infinite;}
-.session-boot-card p{margin:0;color:#64748b;font-weight:700;}
+.session-boot-card{width:min(460px,94vw);background:rgba(255,255,255,.94);border:1px solid #cfe7d6;border-radius:24px;padding:34px 26px 30px;text-align:center;box-shadow:0 18px 50px rgba(13,107,50,.12);backdrop-filter:blur(4px);}
+.session-boot-brand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px;color:#0d6b32;font-weight:900;font-size:14px;letter-spacing:.08em;text-transform:uppercase;}
+.session-boot-logo{display:block;width:min(320px,84%);height:auto;max-height:86px;margin:0 auto 20px;object-fit:contain;}
+.session-boot-title{margin:0;color:#0d6b32;font-size:22px;font-weight:900;}
+.session-boot-subtitle{margin:7px 0 20px;color:#64748b;font-size:14px;}
+.session-spinner{width:36px;height:36px;margin:0 auto 14px;border:4px solid #dcefe2;border-top-color:#159447;border-right-color:#0d6b32;border-radius:50%;animation:sessionSpin .8s linear infinite;}
+.session-boot-progress{width:min(250px,70%);height:5px;margin:0 auto;background:#e7f3eb;border-radius:999px;overflow:hidden;}
+.session-boot-progress::after{content:"";display:block;width:42%;height:100%;background:linear-gradient(90deg,#159447,#0d6b32);border-radius:999px;animation:sessionProgress 1.25s ease-in-out infinite;}
+.session-boot-card p{margin:0;}
 @keyframes sessionSpin{to{transform:rotate(360deg)}}
+@keyframes sessionProgress{0%{transform:translateX(-140%)}50%{transform:translateX(90%)}100%{transform:translateX(240%)}}
+@media(max-width:650px){.session-boot{min-height:calc(100vh - 70px);padding:18px 12px}.session-boot-card{padding:28px 18px 24px;border-radius:20px}.session-boot-logo{max-height:70px}}
