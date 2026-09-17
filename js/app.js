@@ -1264,11 +1264,15 @@ $('#calendarList')?.addEventListener('click',e=>{
   if(statsBtn&&isAdmin()){
     const m=matches.find(x=>x.id===statsBtn.dataset.id);
     if(m){
-      // Dettaglio calendario: currentMatch viene usata temporaneamente per la
-      // schermata partita, ma show('dashboard') ricalcolera' la Home dal calendario.
+      // Aprendo il tabellino dal Calendario dobbiamo ricaricare esplicitamente
+      // stats e riepilogo della partita selezionata, anche dopo logout/login.
       currentMatch=m;
       lineup=Array.isArray(m.lineup)?[...m.lineup]:[];
       localVoted=false;
+      currentMatchStats={};
+      currentMatchSummary={};
+      matchDetailsFor=null;
+      await loadCurrentMatchDetails(m.id);
       renderMatch();
       show('match');
     }
