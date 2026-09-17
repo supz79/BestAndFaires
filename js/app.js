@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.20.4 - A-25 Partite disputate compatte */
+/* Best&Faires Beta.7.20.4 - A-26 Fix visualizzazione partita dal Calendario */
 
 let players = [];
 let matches = [];
@@ -1386,13 +1386,22 @@ async function startVoteTimer(){
       expiredVoteMatchHandled=currentMatch.id;
       const expiredId=currentMatch.id;
       try{
-        await loadMatches();
-        if(currentMatch?.id!==expiredId){
-          await loadCurrentMatchDetails(currentMatch.id);
-          await loadOwnVoteState(currentMatch?.id);
+        // Se l'Admin/Player sta visualizzando esplicitamente una partita dal Calendario,
+        // la scadenza del voto non deve sostituire quella partita con il Next Match.
+        // La selezione Home viene ricalcolata solo quando siamo effettivamente in Dashboard.
+        const dashboardActive=$('#dashboard')?.classList.contains('active');
+        if(dashboardActive){
+          await loadMatches();
+          if(currentMatch?.id!==expiredId){
+            await loadCurrentMatchDetails(currentMatch.id);
+            await loadOwnVoteState(currentMatch?.id);
+          }
+          renderDashboard();
+          renderMatch();
+        }else{
+          updateVoteWindowUI();
+          renderMatch();
         }
-        renderDashboard();
-        renderMatch();
       }catch(e){ console.error('Aggiornamento partita dopo scadenza voti:',e); }
     }
 
@@ -1404,12 +1413,19 @@ async function startVoteTimer(){
         expiredVoteMatchHandled=`start:${currentMatch.id}`;
         const scheduledId=currentMatch.id;
         try{
-          await loadMatches();
-          if(currentMatch?.id===scheduledId){
-            renderDashboard();
+          // Anche qui, non sostituire una partita aperta manualmente dal Calendario.
+          const dashboardActive=$('#dashboard')?.classList.contains('active');
+          if(dashboardActive){
+            await loadMatches();
+            if(currentMatch?.id===scheduledId){
+              renderDashboard();
+            }else{
+              await loadCurrentMatchDetails(currentMatch?.id);
+              await loadOwnVoteState(currentMatch?.id);
+              renderMatch();
+            }
           }else{
-            await loadCurrentMatchDetails(currentMatch?.id);
-            await loadOwnVoteState(currentMatch?.id);
+            updateVoteWindowUI();
             renderMatch();
           }
         }catch(e){ console.error('Aggiornamento partita allo scadere del countdown:',e); }
