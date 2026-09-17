@@ -104,3 +104,255 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 
 /* Mobile */
 @media(max-width:650px){.league-hero{border-radius:18px;padding:20px 22px}.league-hero h1{font-size:30px}.league-hero-logo-wrap{min-width:125px;min-height:125px}.league-hero-logo{width:112px;height:112px}#dashboard .action span{font-size:29px}#dashboardMatchCard{border-radius:18px}}
+
+/* ============================================================
+   A-32 · HOME REDESIGN
+   Solo grafica/UX: nessuna modifica alla logica applicativa.
+   ============================================================ */
+
+/* Layout generale della Home */
+#dashboard{max-width:1040px;margin:0 auto}
+#dashboard > .card{margin-bottom:18px}
+
+/* Header superiore più leggero e istituzionale */
+.topbar{
+  position:relative;
+  background:#ffffff;
+  color:#111827;
+  border-bottom:1px solid #e5e7eb;
+  box-shadow:0 2px 12px rgba(17,24,39,.05);
+}
+.topbar::after{
+  content:"";
+  position:absolute;
+  left:0;right:0;bottom:-1px;
+  height:3px;
+  background:linear-gradient(90deg,var(--league-primary,#159447),var(--league-primary-dark,#0d6b32));
+  opacity:.95;
+}
+.topbar .ghost{
+  border-color:#d1d5db;
+  border-radius:12px;
+  padding:9px 14px;
+  font-weight:800;
+  box-shadow:0 2px 8px rgba(17,24,39,.04);
+}
+.topbar .ghost:hover{
+  background:var(--league-primary-soft,#effaf3);
+  border-color:var(--league-border,#cfe7d6);
+}
+
+/* Hero della lega: testata, non semplice card */
+#dashboard .league-hero{
+  min-height:178px;
+  padding:30px 32px 28px;
+  border-radius:24px;
+  border:1px solid var(--league-border,#cfe7d6);
+  background:
+    radial-gradient(circle at 96% 8%, rgba(21,148,71,.10) 0 76px, transparent 77px),
+    linear-gradient(135deg,#ffffff 0%,#fbfefc 54%,var(--league-primary-soft,#effaf3) 100%);
+  box-shadow:0 12px 32px rgba(13,107,50,.09);
+}
+#dashboard .league-hero::before{width:10px}
+#dashboard .league-hero::after{
+  right:-45px;
+  top:-65px;
+  width:155px;height:155px;
+  background:var(--league-primary-soft,#effaf3);
+  opacity:.78;
+}
+#dashboard .league-hero-copy{padding-left:10px;max-width:72%;}
+#dashboard .league-hero .eyebrow{font-size:11px;letter-spacing:.18em;}
+#dashboard .league-hero h1{
+  margin:7px 0 8px;
+  font-size:clamp(30px,4vw,40px);
+  line-height:1.02;
+  letter-spacing:-.035em;
+}
+#dashboard .league-hero p{font-size:14px;font-weight:700;letter-spacing:.02em}
+#dashboard .league-hero-logo-wrap{min-width:172px;min-height:172px;padding:2px 8px 2px 18px}
+#dashboard .league-hero-logo{width:156px;height:156px}
+
+/* Menu principale: card più compatte e con gerarchia visiva */
+#dashboard .grid.two{
+  gap:14px;
+  margin:0 0 18px;
+}
+#dashboard .action{
+  position:relative;
+  min-height:136px;
+  padding:19px 20px 18px;
+  border-radius:18px;
+  border:1px solid #e5e7eb;
+  background:#fff;
+  box-shadow:0 7px 22px rgba(17,24,39,.055);
+  overflow:hidden;
+}
+#dashboard .action::after{
+  content:"";
+  position:absolute;
+  right:-24px;bottom:-30px;
+  width:90px;height:90px;
+  border-radius:50%;
+  background:var(--league-primary-soft,#effaf3);
+  opacity:.6;
+  pointer-events:none;
+  transition:transform .2s ease,opacity .2s ease;
+}
+#dashboard .action span{
+  position:relative;
+  z-index:1;
+  width:44px;height:44px;
+  display:flex;
+  align-items:center;justify-content:center;
+  margin:0 0 15px;
+  border-radius:14px;
+  background:var(--league-primary-soft,#effaf3);
+  color:var(--league-primary-dark,#0d6b32);
+  font-size:24px;
+  line-height:1;
+  transition:transform .18s ease,background .18s ease;
+}
+#dashboard .action b,
+#dashboard .action small{position:relative;z-index:1}
+#dashboard .action b{
+  font-size:16px;
+  letter-spacing:-.01em;
+}
+#dashboard .action small{
+  margin-top:4px;
+  font-size:12px;
+  line-height:1.35;
+}
+#dashboard .action:hover{
+  transform:translateY(-3px);
+  border-color:var(--league-border,#cfe7d6);
+  box-shadow:0 14px 30px rgba(13,107,50,.10);
+}
+#dashboard .action:hover::after{transform:scale(1.2);opacity:.88}
+#dashboard .action:hover span{transform:translateY(-1px) scale(1.04);background:#e2f5e8}
+
+/* Strumenti amministrativi: più discreti rispetto alle funzioni principali */
+#dashboard .action:nth-child(5),
+#dashboard .action:nth-child(6){
+  min-height:112px;
+  background:linear-gradient(180deg,#ffffff 0%,#fbfcfb 100%);
+  border-style:dashed;
+  box-shadow:0 4px 16px rgba(17,24,39,.04);
+}
+#dashboard .action:nth-child(5) span,
+#dashboard .action:nth-child(6) span{
+  width:38px;height:38px;
+  margin-bottom:11px;
+  font-size:20px;
+  background:#f4f8f5;
+}
+
+/* Match card: protagonista della Home */
+#dashboardMatchCard{
+  position:relative;
+  overflow:hidden;
+  padding:22px 24px 20px;
+  min-height:190px;
+  border-radius:24px;
+  border:1px solid var(--league-border,#cfe7d6);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(21,148,71,.07) 0 90px, transparent 91px),
+    #ffffff;
+  box-shadow:0 12px 34px rgba(13,107,50,.09);
+}
+#dashboardMatchCard::before{
+  content:"";
+  position:absolute;
+  left:0;top:0;bottom:0;
+  width:8px;
+  background:linear-gradient(180deg,var(--league-primary,#159447),var(--league-primary-dark,#0d6b32));
+}
+#dashboardMatchCard::after{
+  content:"MATCH";
+  position:absolute;
+  top:18px;right:22px;
+  font-size:9px;font-weight:900;letter-spacing:.18em;
+  color:#94a3b8;
+  opacity:.85;
+}
+#dashboardMatchCard > div:first-child{
+  position:relative;
+  z-index:1;
+  align-items:flex-start;
+  padding-left:2px;
+}
+#dashboardMatchCard #matchEyebrow{
+  color:var(--league-primary-dark,#0d6b32);
+  font-size:10px;
+  letter-spacing:.16em;
+}
+#dashboardMatchCard #matchTitle{
+  margin:8px 0 0;
+  font-size:clamp(22px,3vw,30px);
+  line-height:1.12;
+  letter-spacing:-.025em;
+  color:#111827;
+  max-width:760px;
+}
+#dashboardMatchCard #voteState{margin-top:1px}
+#dashboardMatchCard .progress{margin:22px 0 9px;height:9px;background:#edf1ee}
+#dashboardMatchCard #voteCount{color:#64748b;font-weight:700}
+#dashboardMatchCard .match-countdown{
+  margin:9px 0 2px;
+  color:var(--league-primary-dark,#0d6b32);
+  font-size:18px;
+  letter-spacing:.015em;
+}
+#dashboardMatchCard.is-clickable:hover{
+  transform:translateY(-3px);
+  border-color:var(--league-primary);
+  box-shadow:0 18px 40px rgba(13,107,50,.13);
+}
+#dashboardMatchCard.is-clickable:focus-visible{
+  outline:3px solid rgba(21,148,71,.18);
+  outline-offset:3px;
+}
+
+/* Stati più leggibili senza toccare la logica */
+#dashboardMatchCard .pill.open{
+  background:#e7f7ed;
+  color:var(--league-primary-dark,#0d6b32);
+  border:1px solid #cbe8d4;
+}
+
+/* Mobile: gerarchia verticale, senza ridurre la leggibilità */
+@media(max-width:650px){
+  main{padding-left:12px;padding-right:12px}
+  #dashboard .league-hero{
+    min-height:156px;
+    padding:22px 20px;
+    border-radius:20px;
+  }
+  #dashboard .league-hero-copy{max-width:67%;padding-left:7px}
+  #dashboard .league-hero h1{font-size:29px}
+  #dashboard .league-hero-logo-wrap{min-width:124px;min-height:124px;padding:4px 2px 4px 8px}
+  #dashboard .league-hero-logo{width:116px;height:116px}
+  #dashboard .grid.two{gap:11px}
+  #dashboard .action{min-height:126px;padding:16px 16px 15px;border-radius:16px}
+  #dashboard .action span{width:40px;height:40px;font-size:22px;margin-bottom:12px}
+  #dashboard .action b{font-size:15px}
+  #dashboard .action small{font-size:11px}
+  #dashboard .action:nth-child(5),
+  #dashboard .action:nth-child(6){min-height:102px}
+  #dashboardMatchCard{min-height:172px;padding:19px 18px 18px;border-radius:20px}
+  #dashboardMatchCard::after{right:16px;top:15px}
+  #dashboardMatchCard #matchTitle{font-size:22px;max-width:100%;padding-right:18px}
+  #dashboardMatchCard .progress{margin-top:18px}
+}
+
+/* Schermi molto stretti: la match card non deve comprimersi */
+@media(max-width:430px){
+  #dashboard .grid.two{grid-template-columns:1fr 1fr}
+  #dashboard .action{min-height:120px}
+  #dashboard .league-hero-copy{max-width:61%}
+  #dashboard .league-hero-logo-wrap{min-width:112px}
+  #dashboard .league-hero-logo{width:104px;height:104px}
+  #dashboardMatchCard > div:first-child{gap:10px}
+  #dashboardMatchCard #matchTitle{font-size:20px}
+}
