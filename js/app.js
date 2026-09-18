@@ -141,7 +141,7 @@ function selectHomeMatch(){
       const status=String(m.status||'');
       const blocked=['cancelled','postponed'].includes(status);
       const started=!!d && Date.now()>=d.getTime();
-      const isLive = started && eligible && !blocked && ['in_progress','voting_open'].includes(status);
+      const isLive = started && eligible && !blocked && ['scheduled','in_progress','voting_open'].includes(status);
       const isFinishedVoting = status==='finished' && eligible && votingWindowOpen(m);
       return isLive || isFinishedVoting;
     });
@@ -200,9 +200,9 @@ function renderDashboard(){
   const meInLineup=isPlayer() && currentPlayerInLineup();
   let label='PROGRAMMATA';
   let cls='pill';
-  if(started && meInLineup && votingWindowOpen(currentMatch)) { label='VOTA ORA'; cls='pill open'; }
-  else if(started && meInLineup && !votingWindowOpen(currentMatch)) { label='VOTO SCADUTO'; cls='pill closed'; }
-  else if(started && meInLineup) { label='IN CORSO'; cls='pill'; }
+  if(started && String(currentMatch.status||'')==='finished' && meInLineup && votingWindowOpen(currentMatch)) { label='VOTA ORA'; cls='pill open'; }
+  else if(started && String(currentMatch.status||'')==='finished' && meInLineup && !votingWindowOpen(currentMatch)) { label='VOTO SCADUTO'; cls='pill closed'; }
+  else if(started) { label='IN CORSO'; cls='pill'; }
   else if(started) { label='IN CORSO'; cls='pill'; }
   else { label='PROSSIMA'; cls='pill'; }
   if(state){state.textContent=label;state.className=cls;}
