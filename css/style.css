@@ -1595,3 +1595,11 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
     text-align:left;
   }
 }
+
+
+/* A-34.4 - Tabellino PC: numeri centrati nelle celle */
+@media(min-width:761px){
+  #matchStatsList .stats-row input[type="number"]{
+    text-align:center;
+  }
+}
