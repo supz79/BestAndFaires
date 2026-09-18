@@ -1552,3 +1552,33 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
   #matchStatsList .stats-field input[type=number]{width:100%;}
   #matchStatsList .stats-field input[type=checkbox]{margin:0;}
 }
+
+
+/* A-34.2 - Tabellino desktop: griglia esplicita a 6 colonne.
+   Evita che ROSSI finisca su una seconda riga e mantiene identiche
+   le colonne tra intestazione e dati. */
+@media(min-width:761px){
+  #matchStatsList .stats-grid.stats-header,
+  #matchStatsList .stats-row{
+    display:grid;
+    grid-template-columns:minmax(250px,1fr) repeat(5,minmax(78px,90px));
+    column-gap:14px;
+    align-items:center;
+    width:100%;
+    box-sizing:border-box;
+  }
+  #matchStatsList .stats-grid.stats-header{
+    grid-auto-flow:row;
+    overflow:visible;
+  }
+  #matchStatsList .stats-grid.stats-header > span,
+  #matchStatsList .stats-row > label{
+    min-width:0;
+  }
+  #matchStatsList .stats-row > label{
+    justify-self:stretch;
+  }
+  #matchStatsList .stats-row input[type=number]{
+    margin:0 auto;
+  }
+}
