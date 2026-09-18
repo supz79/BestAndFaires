@@ -1632,3 +1632,72 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
     justify-content:center;
   }
 }
+
+/* A-34.6 - Tabellino Hockey: allineamento desktop dopo l'introduzione del Verde.
+   La griglia passa da 6 a 7 colonne reali (Giocatore + 6 statistiche)
+   e mantiene intestazioni, controlli e campi sullo stesso asse. */
+@media(min-width:761px){
+  #matchStatsList .stats-grid.stats-header,
+  #matchStatsList .stats-row{
+    display:grid;
+    grid-template-columns:minmax(240px,1.8fr) repeat(6,minmax(68px,.7fr));
+    column-gap:12px;
+    align-items:center;
+    width:100%;
+    box-sizing:border-box;
+  }
+  #matchStatsList .stats-grid.stats-header{grid-auto-flow:row;}
+  #matchStatsList .stats-grid.stats-header > span:not(:first-child){text-align:center;}
+  #matchStatsList .stats-grid.stats-header > span:first-child,
+  #matchStatsList .stats-row > div:first-child{
+    justify-self:stretch;
+    text-align:left;
+  }
+  #matchStatsList .stats-row > .stats-field{
+    width:100%;
+    min-width:0;
+    justify-self:stretch;
+    align-items:center;
+  }
+  #matchStatsList .stats-row > .stats-field input[type="number"]{
+    display:block;
+    width:72px;
+    margin:0 auto;
+    text-align:center;
+  }
+  #matchStatsList .stats-row > .stats-field.inline-check{
+    justify-content:center;
+  }
+}
+
+/* A-34.6 - Allineamento anche nei riepiloghi delle partite disputate. */
+@media(min-width:761px){
+  #played .played-player-row{
+    grid-template-columns:minmax(190px,1.7fr) repeat(6,minmax(62px,.8fr));
+    column-gap:9px;
+  }
+}
+
+/* A-34.6 - Riepilogo stagionale: 6 statistiche dopo il nome. */
+@media(min-width:761px){
+  #players #seasonStatsTable .stats-season .stats-row{
+    grid-template-columns:minmax(220px,1.8fr) repeat(6,minmax(68px,1fr));
+  }
+}
+
+@media(max-width:760px){
+  #played .played-player-row > span:nth-child(4)::before{content:'Verdi';}
+  #played .played-player-row > span:nth-child(5)::before{content:'Gialli';}
+  #played .played-player-row > span:nth-child(6)::before{content:'Rossi';}
+  #played .played-player-row > span:nth-child(7)::before{content:'Voto';}
+
+  #players #seasonStatsTable .stats-season .stats-row{
+    grid-template-columns:repeat(6,minmax(0,1fr));
+  }
+  #players #seasonStatsTable .stats-season .stats-row > span:nth-child(2)::before{content:'Pres.';}
+  #players #seasonStatsTable .stats-season .stats-row > span:nth-child(3)::before{content:'Gol';}
+  #players #seasonStatsTable .stats-season .stats-row > span:nth-child(4)::before{content:'Assist';}
+  #players #seasonStatsTable .stats-season .stats-row > span:nth-child(5)::before{content:'Verdi';}
+  #players #seasonStatsTable .stats-season .stats-row > span:nth-child(6)::before{content:'Gialli';}
+  #players #seasonStatsTable .stats-season .stats-row > span:nth-child(7)::before{content:'Rossi';}
+}
