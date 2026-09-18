@@ -387,7 +387,7 @@ async function loadPlayedMatchDetails(matchId, card){
     const rows=played.map(id=>{
       const p=players.find(x=>x.id===id); if(!p) return '';
       const st=statMap[id]||{}; const r=results[id]||{};
-      return `<div class="played-player-row"><b>${escapeHtml(playerName(p))}</b><span>${statNum(st.goals)}</span><span>${statNum(st.assists)}</span><span>${statNum(st.yellow)}</span><span>${statNum(st.red)}</span><span>${statNum(r.points)} pt</span></div>`;
+      return `<div class="played-player-row"><b>${escapeHtml(playerName(p))}</b><span>${statNum(st.goals)}</span><span>${statNum(st.assists)}</span><span>${statNum(st.green)}</span><span>${statNum(st.yellow)}</span><span>${statNum(st.red)}</span><span>${statNum(r.points)} pt</span></div>`;
     }).join('');
     const scorers=[];
     played.forEach(id=>{
@@ -398,7 +398,7 @@ async function loadPlayedMatchDetails(matchId, card){
       ? `<div class="scorers-line"><b>⚽ Marcatori:</b> ${scorers.map(n=>escapeHtml(n)).join(', ')}</div>`
       : '';
 
-    body.innerHTML=`<div class="played-score">${matchScoreText(m,summary)}</div>${scorersText}<div class="mvp-box">${mvpText}</div><div class="played-stats"><div class="played-player-row played-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span><span>Voto</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}</div>`;
+    body.innerHTML=`<div class="played-score">${matchScoreText(m,summary)}</div>${scorersText}<div class="mvp-box">${mvpText}</div><div class="played-stats"><div class="played-player-row played-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Verdi</span><span>Gialli</span><span>Rossi</span><span>Voto</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}</div>`;
     card.dataset.loaded='1';
   }catch(e){
     console.error('Dettaglio partita disputata:',e);
@@ -515,6 +515,7 @@ function renderMatchStats(){
         <label class="stats-field inline-check"><span>Pres.</span><input class="stat-appearance" type="checkbox" ${played?'checked':''}></label>
         <label class="stats-field"><span>Gol</span><input class="stat-goals" type="number" min="0" step="1" value="${statNum(st.goals)}" ${played?'':'disabled'}></label>
         <label class="stats-field"><span>Assist</span><input class="stat-assists" type="number" min="0" step="1" value="${statNum(st.assists)}" ${played?'':'disabled'}></label>
+        <label class="stats-field"><span>Verdi</span><input class="stat-green" type="number" min="0" step="1" value="${statNum(st.green)}" ${played?'':'disabled'}></label>
         <label class="stats-field"><span>Gialli</span><input class="stat-yellow" type="number" min="0" step="1" value="${statNum(st.yellow)}" ${played?'':'disabled'}></label>
         <label class="stats-field"><span>Rossi</span><input class="stat-red" type="number" min="0" step="1" value="${statNum(st.red)}" ${played?'':'disabled'}></label>
       </div>`;
@@ -524,9 +525,9 @@ function renderMatchStats(){
   }).join('');
 
   if(canEdit){
-    box.innerHTML=`<div class="stats-grid stats-header"><span>Giocatore</span><span>Pres.</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span></div>${rows||'<p class="muted">Nessun giocatore.</p>'}`;
+    box.innerHTML=`<div class="stats-grid stats-header"><span>Giocatore</span><span>Pres.</span><span>Gol</span><span>Assist</span><span>Verdi</span><span>Gialli</span><span>Rossi</span></div>${rows||'<p class="muted">Nessun giocatore.</p>'}`;
   }else{
-    box.innerHTML=`<div class="stats-row stats-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}`;
+    box.innerHTML=`<div class="stats-row stats-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Verdi</span><span>Gialli</span><span>Rossi</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}`;
   }
 
   if(msg){
@@ -573,7 +574,7 @@ async function saveMatchStats(){
       if(appearance) localScore += goals;
       const ref=db.collection('matches').doc(currentMatch.id).collection('stats').doc(playerId);
       if(!appearance){ batch.delete(ref); return; }
-      const data={appearance:1,goals,assists:statNum(row.querySelector('.stat-assists')?.value),yellow:statNum(row.querySelector('.stat-yellow')?.value),red:statNum(row.querySelector('.stat-red')?.value)};
+      const data={appearance:1,goals,assists:statNum(row.querySelector('.stat-assists')?.value),green:statNum(row.querySelector('.stat-green')?.value),yellow:statNum(row.querySelector('.stat-yellow')?.value),red:statNum(row.querySelector('.stat-red')?.value)};
       batch.set(ref,data,{merge:true});
     });
     const opponentScore=statNum($('#opponentScore')?.value);
@@ -633,7 +634,7 @@ async function openExceptionalStatsEdit(){
 }
 
 async function loadSeasonStats(){
-  const totals=Object.fromEntries(players.map(p=>[p.id,{...p,appearances:0,goals:0,assists:0,yellow:0,red:0}]));
+  const totals=Object.fromEntries(players.map(p=>[p.id,{...p,appearances:0,goals:0,assists:0,green:0,yellow:0,red:0}]));
   try{
     await Promise.all(matches.map(async m=>{
       const snap=await db.collection('matches').doc(m.id).collection('stats').get();
@@ -641,7 +642,7 @@ async function loadSeasonStats(){
         if(!totals[d.id]) return;
         const x=d.data()||{};
         if(x.appearance===1 || x.appearance===true) totals[d.id].appearances+=1;
-        totals[d.id].goals+=statNum(x.goals); totals[d.id].assists+=statNum(x.assists); totals[d.id].yellow+=statNum(x.yellow); totals[d.id].red+=statNum(x.red);
+        totals[d.id].goals+=statNum(x.goals); totals[d.id].assists+=statNum(x.assists); totals[d.id].green+=statNum(x.green); totals[d.id].yellow+=statNum(x.yellow); totals[d.id].red+=statNum(x.red);
       });
     }));
   }catch(e){console.error('Statistiche stagione:',e);}
@@ -650,7 +651,7 @@ async function loadSeasonStats(){
 async function renderSeasonStats(){
   const box=$('#seasonStatsTable'); if(!box) return;
   const rows=await loadSeasonStats();
-  box.innerHTML=`<div class="card"><span class="eyebrow">STAGIONE</span><h3>Statistiche giocatori</h3><p class="muted">Riepilogo cumulativo delle partite disputate. I dati di ogni singola partita restano conservati nel relativo tabellino.</p><div class="stats-season"><div class="stats-header"><span>Giocatore</span><span>Pres.</span><span>Gol</span><span>Assist</span><span>Gialli</span><span>Rossi</span></div>${rows.map(p=>`<div class="stats-row"><div><b>${escapeHtml(playerName(p))}</b></div><span>${p.appearances}</span><span>${p.goals}</span><span>${p.assists}</span><span>${p.yellow}</span><span>${p.red}</span></div>`).join('')}</div></div>`;
+  box.innerHTML=`<div class="card"><span class="eyebrow">STAGIONE</span><h3>Statistiche giocatori</h3><p class="muted">Riepilogo cumulativo delle partite disputate. I dati di ogni singola partita restano conservati nel relativo tabellino.</p><div class="stats-season"><div class="stats-header"><span>Giocatore</span><span>Pres.</span><span>Gol</span><span>Assist</span><span>Verdi</span><span>Gialli</span><span>Rossi</span></div>${rows.map(p=>`<div class="stats-row"><div><b>${escapeHtml(playerName(p))}</b></div><span>${p.appearances}</span><span>${p.goals}</span><span>${p.assists}</span><span>${p.green}</span><span>${p.yellow}</span><span>${p.red}</span></div>`).join('')}</div></div>`;
 }
 
 function renderMatch(){

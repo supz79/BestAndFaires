@@ -99,17 +99,20 @@ service cloud.firestore {
           'appearance',
           'goals',
           'assists',
+          'green',
           'yellow',
           'red'
         ])
         && request.resource.data.appearance is int
         && request.resource.data.goals is int
         && request.resource.data.assists is int
+        && request.resource.data.green is int
         && request.resource.data.yellow is int
         && request.resource.data.red is int
         && request.resource.data.appearance == 1
         && request.resource.data.goals >= 0
         && request.resource.data.assists >= 0
+        && request.resource.data.green >= 0
         && request.resource.data.yellow >= 0
         && request.resource.data.red >= 0;
     }
