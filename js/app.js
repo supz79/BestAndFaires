@@ -1390,13 +1390,13 @@ document.addEventListener('change',e=>{
     if(!row) return;
     matchStatsDraftDirty=true;
     const enabled=e.target.checked;
-    row.querySelectorAll('.stat-goals,.stat-assists,.stat-yellow,.stat-red').forEach(input=>{ input.disabled=!enabled; });
+    row.querySelectorAll('.stat-goals,.stat-assists,.stat-green,.stat-yellow,.stat-red').forEach(input=>{ input.disabled=!enabled; });
     const note=row.querySelector('.stats-note');
     if(note) note.textContent=enabled?'Presenza registrata':'Non ancora registrato come presente';
   }
 });
 document.addEventListener('input',e=>{
-  if(e.target.matches('.stat-goals,.stat-assists,.stat-yellow,.stat-red,#opponentScore')) matchStatsDraftDirty=true;
+  if(e.target.matches('.stat-goals,.stat-assists,.stat-green,.stat-yellow,.stat-red,#opponentScore')) matchStatsDraftDirty=true;
 });
 
 $('#saveMatchStatsBtn')?.addEventListener('click',saveMatchStats);
