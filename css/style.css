@@ -1603,3 +1603,32 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
     text-align:center;
   }
 }
+
+
+/* A-34.5 - Tabellino PC: asse comune reale tra intestazione e controlli.
+   Ogni elemento statistico viene centrato nella propria colonna della stessa griglia. */
+@media(min-width:761px){
+  #matchStatsList .stats-grid.stats-header,
+  #matchStatsList .stats-row{
+    justify-items:center;
+  }
+  #matchStatsList .stats-grid.stats-header > span:first-child,
+  #matchStatsList .stats-row > div:first-child{
+    justify-self:stretch;
+    text-align:left;
+  }
+  #matchStatsList .stats-row > .stats-field{
+    justify-self:center;
+    width:100%;
+    box-sizing:border-box;
+  }
+  #matchStatsList .stats-row > .stats-field input[type="number"]{
+    display:block;
+    margin-left:auto;
+    margin-right:auto;
+  }
+  #matchStatsList .stats-row > .stats-field.inline-check{
+    width:100%;
+    justify-content:center;
+  }
+}
