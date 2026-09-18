@@ -1582,3 +1582,16 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
     margin:0 auto;
   }
 }
+
+
+/* A-34.3 - Tabellino PC: intestazioni centrate sugli input.
+   Le colonne restano identiche, ma Pres./Gol/Assist/Gialli/Rossi
+   vengono centrati esattamente sull'asse dei rispettivi campi. */
+@media(min-width:761px){
+  #matchStatsList .stats-grid.stats-header > span:not(:first-child){
+    text-align:center;
+  }
+  #matchStatsList .stats-grid.stats-header > span:first-child{
+    text-align:left;
+  }
+}
