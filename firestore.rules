@@ -490,11 +490,11 @@ service cloud.firestore {
           && tabellinoWriteAllowed(matchId);
 
 
-        // Solo Admin può cancellare le statistiche, entro la finestra
-        // di modifica o durante una modifica eccezionale autorizzata.
+        // Solo Admin può cancellare le statistiche.
+        // La cancellazione definitiva di una partita deve poter rimuovere
+        // anche le statistiche di un tabellino già finalizzato/bloccato.
         allow delete: if admin()
-          && me().leagueId == matchData(matchId).leagueId
-          && tabellinoWriteAllowed(matchId);
+          && me().leagueId == matchData(matchId).leagueId;
       }
 
 
@@ -527,9 +527,10 @@ service cloud.firestore {
           && request.resource.data.awayScore >= 0;
 
 
+        // La cancellazione definitiva della partita può rimuovere
+        // il risultato anche se il tabellino è già stato finalizzato.
         allow delete: if admin()
-          && me().leagueId == matchData(matchId).leagueId
-          && tabellinoWriteAllowed(matchId);
+          && me().leagueId == matchData(matchId).leagueId;
       }
 
 
