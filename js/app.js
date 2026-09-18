@@ -512,11 +512,11 @@ function renderMatchStats(){
     if(canEdit){
       return `<div class="stats-row" data-stat-player="${escapeHtml(id)}">
         <div><b>${escapeHtml(playerName(p))}</b><div class="stats-note">${played?'Presenza registrata':'Non ancora registrato come presente'}</div></div>
-        <label class="inline-check"><input class="stat-appearance" type="checkbox" ${played?'checked':''}> Pres.</label>
-        <input class="stat-goals" type="number" min="0" step="1" value="${statNum(st.goals)}" ${played?'':'disabled'}>
-        <input class="stat-assists" type="number" min="0" step="1" value="${statNum(st.assists)}" ${played?'':'disabled'}>
-        <input class="stat-yellow" type="number" min="0" step="1" value="${statNum(st.yellow)}" ${played?'':'disabled'}>
-        <input class="stat-red" type="number" min="0" step="1" value="${statNum(st.red)}" ${played?'':'disabled'}>
+        <label class="stats-field inline-check"><span>Pres.</span><input class="stat-appearance" type="checkbox" ${played?'checked':''}></label>
+        <label class="stats-field"><span>Gol</span><input class="stat-goals" type="number" min="0" step="1" value="${statNum(st.goals)}" ${played?'':'disabled'}></label>
+        <label class="stats-field"><span>Assist</span><input class="stat-assists" type="number" min="0" step="1" value="${statNum(st.assists)}" ${played?'':'disabled'}></label>
+        <label class="stats-field"><span>Gialli</span><input class="stat-yellow" type="number" min="0" step="1" value="${statNum(st.yellow)}" ${played?'':'disabled'}></label>
+        <label class="stats-field"><span>Rossi</span><input class="stat-red" type="number" min="0" step="1" value="${statNum(st.red)}" ${played?'':'disabled'}></label>
       </div>`;
     }
     if(!played && !Object.keys(currentMatchStats).length) return '';
