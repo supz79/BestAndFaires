@@ -8,6 +8,27 @@
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="css/style.css?v=7.46">
   <title>Best&Faires</title>
+
+<style id="storico-squadra-style">
+.storico-intro h3{margin-bottom:6px}
+.storico-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;font-size:.86rem}
+.storico-legend span{padding:6px 10px;border-radius:999px;background:var(--league-primary-soft,#effaf3);border:1px solid var(--league-border,#cfe7d6)}
+.storico-day{margin-bottom:14px}
+.storico-day-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.storico-day-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.storico-metric{padding:5px 9px;border-radius:999px;background:rgba(127,127,127,.09);font-size:.82rem}
+.storico-net{font-weight:800}
+.storico-table-wrap{overflow-x:auto}
+.storico-table{width:100%;border-collapse:collapse;min-width:820px}
+.storico-table th,.storico-table td{padding:9px 8px;border-bottom:1px solid rgba(127,127,127,.15);text-align:center;white-space:nowrap}
+.storico-table th:first-child,.storico-table td:first-child{text-align:left;min-width:150px}
+.storico-table .not-lineup{opacity:.48}
+.storico-status{font-size:.88rem}
+.storico-day-total{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding-top:12px}
+.storico-filter{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.storico-filter select{min-width:180px}
+@media(max-width:700px){.storico-table{min-width:760px}.storico-day-head{align-items:flex-start;flex-direction:column}}
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -94,7 +115,7 @@
       <button class="action card" data-screen="players"><span>👥</span><b>Rosa squadra</b><small>Giocatori registrati</small></button>
       <button class="action card" data-screen="played"><span>🏟️</span><b>Partite disputate</b><small>Risultati, statistiche e MVP</small></button>
       <button class="action card admin-only" data-screen="admin"><span>⚙️</span><b>Amministrazione</b><small>Gestione lega</small></button>
-      <button class="action card admin-only" data-screen="calendar"><span>📅</span><b>Calendario</b><small>Importa e modifica le partite</small></button>
+      <button class="action card admin-only" data-screen="calendar"><span>📅</span><b>Calendario</b><small>Importa e modifica le partite</small></button> <button class="action card admin-only" data-screen="storicoSquadra"><span>📊</span><b>Storico Squadra</b><small>Voti, malus e partecipazione</small></button>
     </div>
 
     <div class="card status" id="dashboardMatchCard" role="button" tabindex="0" aria-label="Apri partita corrente">
@@ -169,7 +190,23 @@
     <div class="card"><div id="playersTable"></div><div id="seasonStatsTable" class="stats-season"></div></div>
   </section>
 
-  <section id="calendar" class="screen">
+  
+  <section id="storicoSquadra" class="screen">
+    <div class="section-head">
+      <button class="back" data-screen="dashboard">‹</button>
+      <div><span class="eyebrow">ADMIN · STAGIONE</span><h2>Storico Squadra</h2></div>
+    </div>
+    <div class="card storico-intro">
+      <h3>Andamento giornata per giornata</h3>
+      <p class="muted">Per ogni player sono riportati i punti ricevuti dalle votazioni, i cartellini, il malus, il punteggio netto e la partecipazione al voto.</p>
+      <div class="storico-legend">
+        <span>✓ Ha votato</span><span>○ Non ha votato</span><span>— Non schierato</span>
+      </div>
+    </div>
+    <div id="storicoSquadraList"></div>
+  </section>
+
+<section id="calendar" class="screen">
     <div class="section-head"><button class="back" data-screen="dashboard">‹</button><div><span class="eyebrow">ADMIN</span><h2>Calendario</h2></div></div>
     <div class="card">
       <div class="calendar-toolbar"><div><h3>Calendario partite</h3><p class="muted">Casa/trasferta viene riconosciuta automaticamente confrontando le squadre del file con la squadra della lega.</p></div><button id="newMatchBtn" class="primary">＋ Nuova partita</button></div>
@@ -242,44 +279,6 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/firebase.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/app.js?v=7.43"></script>
-
-<style>
-.bf-a35-header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:18px 0}
-.bf-a35-header h2{margin:0 0 4px}.bf-a35-header p{margin:0;opacity:.72}
-.bf-a35-summary{display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:12px;margin:14px 0 18px}
-.bf-a35-summary div{padding:14px;border-radius:14px;background:rgba(127,127,127,.10);text-align:center}
-.bf-a35-summary b{display:block;font-size:1.35rem}.bf-a35-summary span{font-size:.82rem;opacity:.72}
-.bf-a35-table-wrap{overflow:auto;border-radius:14px}
-.bf-a35-table{width:100%;border-collapse:collapse;min-width:780px}
-.bf-a35-table th,.bf-a35-table td{padding:9px 10px;border-bottom:1px solid rgba(127,127,127,.18);text-align:center}
-.bf-a35-table th:nth-child(1),.bf-a35-table td:nth-child(1),.bf-a35-table th:nth-child(2),.bf-a35-table td:nth-child(2){text-align:left}
-.bf-a35-totals{margin-top:18px}.bf-a35-totals summary{cursor:pointer;font-weight:700;padding:10px 0}
-.bf-a35-loading,.bf-a35-error{padding:18px;border-radius:14px;background:rgba(127,127,127,.10)}
-</style>
-<section id="bf-a35-storico-root" hidden aria-label="Storico Squadra"></section>
-<script>
-document.addEventListener('DOMContentLoaded', function(){
-  const host = document.getElementById('bf-a35-storico-root');
-  if (!host) return;
-  const adminCandidates = Array.from(document.querySelectorAll('button,a'));
-  const existing = adminCandidates.find(el => /partecipazione votazioni/i.test(el.textContent||''));
-  if (existing) {
-    existing.textContent = '📊 Storico Squadra';
-    existing.removeAttribute('onclick');
-    existing.addEventListener('click', function(e){ e.preventDefault(); window.openStoricoSquadraA35(); });
-  } else {
-    const adminArea = document.querySelector('#admin-view, .admin-view, [data-view="admin"], main');
-    if (adminArea) {
-      const btn = document.createElement('button');
-      btn.type='button'; btn.textContent='📊 Storico Squadra';
-      btn.className='btn';
-      btn.addEventListener('click', function(){ window.openStoricoSquadraA35(); });
-      adminArea.insertBefore(btn, adminArea.firstChild);
-    }
-  }
-});
-</script>
-
+<script src="js/app.js?v=7.44"></script>
 </body>
 </html>

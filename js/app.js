@@ -654,6 +654,147 @@ async function renderSeasonStats(){
   box.innerHTML=`<div class="card"><span class="eyebrow">STAGIONE</span><h3>Statistiche giocatori</h3><p class="muted">Riepilogo cumulativo delle partite disputate. I dati di ogni singola partita restano conservati nel relativo tabellino.</p><div class="stats-season"><div class="stats-header"><span>Giocatore</span><span>Pres.</span><span>Gol</span><span>Assist</span><span>Verdi</span><span>Gialli</span><span>Rossi</span></div>${rows.map(p=>`<div class="stats-row"><div><b>${escapeHtml(playerName(p))}</b></div><span>${p.appearances}</span><span>${p.goals}</span><span>${p.assists}</span><span>${p.green}</span><span>${p.yellow}</span><span>${p.red}</span></div>`).join('')}</div></div>`;
 }
 
+
+// ---------- A35.0 · Storico Squadra Admin ----------
+async function loadStoricoSquadraData(){
+  if(!isAdmin()) return [];
+  const ordered=[...matches].sort((a,b)=>(parseDateTime(a)?.getTime()||0)-(parseDateTime(b)?.getTime()||0));
+  const out=[];
+  for(const m of ordered){
+    if(!Array.isArray(m.lineup) || !m.lineup.length) continue;
+    const [statsSnap,votesSnap,summarySnap]=await Promise.all([
+      db.collection('matches').doc(m.id).collection('stats').get(),
+      db.collection('matches').doc(m.id).collection('votes').get(),
+      db.collection('matches').doc(m.id).collection('summary').doc('main').get()
+    ]);
+    const stats={};
+    statsSnap.forEach(d=>stats[d.id]=d.data()||{});
+    const votes={};
+    votesSnap.forEach(d=>votes[d.id]=d.data()||{});
+    const pointsByPlayer={};
+    Object.values(votes).forEach(v=>{
+      const ranking=Array.isArray(v.ranking)?v.ranking:[];
+      ranking.slice(0,3).forEach((playerId,i)=>{
+        if(!pointsByPlayer[playerId]) pointsByPlayer[playerId]={points:0,votes:0};
+        pointsByPlayer[playerId].points += 3-i;
+        pointsByPlayer[playerId].votes += 1;
+      });
+    });
+
+    const eligibleIds=new Set(
+      m.lineup.filter(id => {
+        const s=stats[id]||{};
+        return s.appearance===1 || s.appearance===true;
+      })
+    );
+    const rows=m.lineup.map(id=>{
+      const p=players.find(x=>x.id===id)||{id,nome:'',cognome:''};
+      const s=stats[id]||{};
+      const eligible=eligibleIds.has(id);
+      const vp=eligible?(pointsByPlayer[id]?.points||0):null;
+      const green=eligible?statNum(s.green):null;
+      const yellow=eligible?statNum(s.yellow):null;
+      const red=eligible?statNum(s.red):null;
+      const malus=eligible?(green*2+yellow*5+red*10):null;
+      const net=eligible?(vp-malus):null;
+      const voted=eligible && !!p.userId && Object.prototype.hasOwnProperty.call(
+        Object.fromEntries(Object.keys(votes).map(k=>[k,true])), String(p.userId)
+      );
+      return {id,name:playerName(p),eligible,voted,votePoints:vp,green,yellow,red,malus,net};
+    });
+
+    const eligibleRows=rows.filter(r=>r.eligible);
+    const teamVotePoints=eligibleRows.reduce((s,r)=>s+(r.votePoints||0),0);
+    const teamMalus=eligibleRows.reduce((s,r)=>s+(r.malus||0),0);
+    const teamNet=teamVotePoints-teamMalus;
+    const votedCount=eligibleRows.filter(r=>r.voted).length;
+    const summary=summarySnap.exists?(summarySnap.data()||{}):{};
+    out.push({match:m,rows,teamVotePoints,teamMalus,teamNet,votedCount,eligibleCount:eligibleRows.length,summary});
+  }
+  return out;
+}
+
+function storicoDateLabel(m){
+  const d=parseDateTime(m);
+  return d ? formatDateTime(d) : 'Data non disponibile';
+}
+function storicoDayLabel(m){
+  const g=m.giornata ?? m.day ?? m.round ?? m.matchday;
+  return g!==undefined && g!==null && String(g).trim()!=='' ? `Giornata ${g}` : 'Giornata';
+}
+function storicoScoreLabel(m,summary){
+  const home=m.homeTeam||leagueTeam(), away=m.awayTeam||m.opponent||'Avversario';
+  const hs=Number(summary?.homeScore), as=Number(summary?.awayScore);
+  return Number.isInteger(hs)&&Number.isInteger(as) ? `${home} ${hs} - ${as} ${away}` : `${home} - ${away}`;
+}
+
+async function renderStoricoSquadra(){
+  const box=$('#storicoSquadraList');
+  if(!box || !isAdmin()) return;
+  box.innerHTML='<div class="card"><p class="muted">Caricamento Storico Squadra…</p></div>';
+  try{
+    const data=await loadStoricoSquadraData();
+    if(!data.length){
+      box.innerHTML='<div class="card"><p class="muted">Non ci sono ancora giornate con una distinta registrata.</p></div>';
+      return;
+    }
+    const options=data.map((x,i)=>`<option value="${i}">${escapeHtml(storicoDayLabel(x.match))} · ${escapeHtml(x.match.opponent||x.match.awayTeam||'Partita')}</option>`).join('');
+    box.innerHTML=`
+      <div class="card">
+        <div class="section-head" style="margin-bottom:0">
+          <div><span class="eyebrow">CONSULTAZIONE</span><h3>Seleziona giornata</h3></div>
+          <select id="storicoDaySelect">${options}</select>
+        </div>
+      </div>
+      <div id="storicoDayContent"></div>`;
+    const renderDay=(idx)=>{
+      const x=data[Number(idx)]||data[0];
+      const rows=x.rows;
+      const body=rows.map(r=>{
+        if(!r.eligible){
+          return `<tr class="not-lineup"><td>${escapeHtml(r.name)}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="storico-status">— Non schierato</td></tr>`;
+        }
+        return `<tr>
+          <td><b>${escapeHtml(r.name)}</b></td>
+          <td>${r.votePoints}</td>
+          <td>${r.green}</td><td>${r.yellow}</td><td>${r.red}</td>
+          <td>−${r.malus}</td><td class="storico-net">${r.net}</td>
+          <td class="storico-status">${r.voted?'✓ Ha votato':'○ Non ha votato'}</td>
+        </tr>`;
+      }).join('');
+      const el=$('#storicoDayContent');
+      el.innerHTML=`
+        <div class="card storico-day">
+          <div class="storico-day-head">
+            <div><span class="eyebrow">${escapeHtml(storicoDayLabel(x.match))}</span><h3>${escapeHtml(storicoScoreLabel(x.match,x.summary))}</h3><p class="muted">${escapeHtml(storicoDateLabel(x.match))}</p></div>
+          </div>
+          <div class="storico-day-meta">
+            <span class="storico-metric">🗳️ Punti votazioni <b>${x.teamVotePoints}</b></span>
+            <span class="storico-metric">➖ Malus <b>−${x.teamMalus}</b></span>
+            <span class="storico-metric">🏆 Netto <b>${x.teamNet}</b></span>
+            <span class="storico-metric">👥 Partecipazione <b>${x.votedCount}/${x.eligibleCount}</b></span>
+          </div>
+          <div class="storico-table-wrap" style="margin-top:14px">
+            <table class="storico-table">
+              <thead><tr><th>Player</th><th>Punti voto</th><th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th><th>Netto</th><th>Partecipazione</th></tr></thead>
+              <tbody>${body}</tbody>
+            </table>
+          </div>
+          <div class="storico-day-total">
+            <span class="storico-metric">Verdi −2 cad.</span>
+            <span class="storico-metric">Gialli −5 cad.</span>
+            <span class="storico-metric">Rossi −10 cad.</span>
+          </div>
+        </div>`;
+    };
+    $('#storicoDaySelect').addEventListener('change',e=>renderDay(e.target.value));
+    renderDay(0);
+  }catch(e){
+    console.error('Storico Squadra:',e);
+    box.innerHTML='<div class="card"><p class="muted">Impossibile caricare lo Storico Squadra.</p></div>';
+  }
+}
+
 function renderMatch(){
   if(!currentMatch){
     $('#matchTitle').textContent='Nessuna partita caricata'; $('#rosterList').innerHTML='<p class="muted">L’Admin deve inserire una partita nel calendario.</p>'; $('#votingCard')?.classList.add('hidden'); $('#matchStatsCard')?.classList.add('hidden'); $('#saveMatchStatsBtn')?.closest('.modal-actions')?.classList.add('hidden'); $('#matchStatsMsg')?.classList.add('hidden'); return;
@@ -1426,7 +1567,7 @@ $('#importCommit')?.addEventListener('click',commitImport);
 $('#importCancel')?.addEventListener('click',()=>{$('#importPreviewCard').classList.add('hidden');calendarDraft=[];$('#excelInput').value='';});
 
 function show(id){
-  if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return;
+  if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return; if(id==='storicoSquadra'&&!isAdmin())return;
   if(id==='dashboard'){
     // La Home deve sempre ricalcolare la propria partita principale.
     // Aprire un vecchio match dal Calendario non deve trascinarlo nella Home.
@@ -1448,7 +1589,7 @@ function show(id){
       });
     }
   }
-  if(id==='calendar')renderCalendar();
+  if(id==='calendar')renderCalendar(); if(id==='storicoSquadra')renderStoricoSquadra();
   if(id==='played')renderPlayedMatches();
   if(id==='dashboard')renderDashboard();
 }
@@ -1552,163 +1693,3 @@ async function startVoteTimer(){
 }
 async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Faires Beta.19: tabellini partita e statistiche stagione.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
-
-
-
-/* A35.0 STORICO SQUADRA */
-window.BF_A35_STORICO = window.BF_A35_STORICO || {
-  malus: { green: 2, yellow: 5, red: 10 }
-};
-
-function bfA35Escape(v) {
-  return String(v ?? '').replace(/[&<>"']/g, c => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[c]));
-}
-
-async function bfA35LoadVotes(matchId) {
-  const snap = await firebase.firestore()
-    .collection('matches').doc(matchId).collection('votes').get();
-  const byVoter = {};
-  snap.forEach(d => { byVoter[d.id] = d.data() || {}; });
-  return byVoter;
-}
-
-function bfA35VotePointsForPlayer(votesByVoter, playerId) {
-  let points = 0;
-  Object.values(votesByVoter || {}).forEach(v => {
-    const ranking = Array.isArray(v.ranking) ? v.ranking : [];
-    if (ranking[0] === playerId) points += 3;
-    else if (ranking[1] === playerId) points += 2;
-    else if (ranking[2] === playerId) points += 1;
-  });
-  return points;
-}
-
-function bfA35Malus(stat) {
-  const g = Number(stat?.green || 0);
-  const y = Number(stat?.yellow || 0);
-  const r = Number(stat?.red || 0);
-  return (g * 2) + (y * 5) + (r * 10);
-}
-
-async function bfA35BuildStorico() {
-  const root = document.getElementById('bf-a35-storico-root');
-  if (!root) return;
-  root.innerHTML = '<div class="bf-a35-loading">Caricamento storico squadra…</div>';
-
-  try {
-    const db = firebase.firestore();
-    const matchesSnap = await db.collection('matches').get();
-    const matches = [];
-    matchesSnap.forEach(d => matches.push({ id: d.id, ...(d.data() || {}) }));
-    matches.sort((a,b) => {
-      const da = a.date?.seconds ? a.date.seconds : (a.date ? new Date(a.date).getTime()/1000 : 0);
-      const dbb = b.date?.seconds ? b.date.seconds : (b.date ? new Date(b.date).getTime()/1000 : 0);
-      return da - dbb;
-    });
-
-    const rows = [];
-    const playerTotals = {};
-
-    for (const m of matches) {
-      const roster = Array.isArray(m.roster) ? m.roster :
-                     Array.isArray(m.players) ? m.players :
-                     Array.isArray(m.distinta) ? m.distinta : [];
-      if (!roster.length) continue;
-
-      const votes = await bfA35LoadVotes(m.id);
-      const statsSnap = await db.collection('matches').doc(m.id).collection('stats').get();
-      const stats = {};
-      statsSnap.forEach(d => { stats[d.id] = d.data() || {}; });
-
-      const players = roster.map(p => {
-        const id = p.uid || p.userId || p.playerId || p.id;
-        const name = p.name || p.displayName || p.playerName || id || 'Player';
-        return { id, name };
-      }).filter(p => p.id);
-
-      let votedCount = 0;
-      players.forEach(p => {
-        if (votes[p.id]) votedCount++;
-        const s = stats[p.id] || {};
-        const votePoints = bfA35VotePointsForPlayer(votes, p.id);
-        const malus = bfA35Malus(s);
-        const net = votePoints - malus;
-        if (!playerTotals[p.id]) playerTotals[p.id] = { name:p.name, played:0, voted:0, votePoints:0, malus:0, net:0 };
-        playerTotals[p.id].played++;
-        if (votes[p.id]) playerTotals[p.id].voted++;
-        playerTotals[p.id].votePoints += votePoints;
-        playerTotals[p.id].malus += malus;
-        playerTotals[p.id].net += net;
-        rows.push({ match:m, player:p, voted:!!votes[p.id], votePoints, stat:s, malus, net });
-      });
-      m.__votedCount = votedCount;
-      m.__eligibleCount = players.length;
-    }
-
-    const matchMap = new Map();
-    rows.forEach(r => {
-      if (!matchMap.has(r.match.id)) matchMap.set(r.match.id, []);
-      matchMap.get(r.match.id).push(r);
-    });
-
-    let html = `
-      <div class="bf-a35-header">
-        <div>
-          <h2>📊 Storico Squadra</h2>
-          <p>Votazioni, partecipazione, cartellini e punteggio netto per ogni giornata.</p>
-        </div>
-      </div>
-      <div class="bf-a35-summary">
-        <div><b>${matchMap.size}</b><span>Giornate</span></div>
-        <div><b>${Object.keys(playerTotals).length}</b><span>Player</span></div>
-        <div><b>${Object.values(playerTotals).reduce((s,x)=>s+x.voted,0)}</b><span>Voti espressi</span></div>
-      </div>
-      <div class="bf-a35-table-wrap">
-      <table class="bf-a35-table">
-        <thead><tr>
-          <th>Giornata</th><th>Player</th><th>Voti ricevuti</th>
-          <th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th><th>Netto</th><th>Ha votato</th>
-        </tr></thead><tbody>`;
-
-    for (const [matchId, list] of matchMap.entries()) {
-      const m = list[0].match;
-      const label = m.round || m.giornata || m.matchday || m.day || m.name || matchId;
-      list.forEach(r => {
-        const s = r.stat || {};
-        html += `<tr>
-          <td>${bfA35Escape(label)}</td>
-          <td>${bfA35Escape(r.player.name)}</td>
-          <td>${r.votePoints}</td>
-          <td>${Number(s.green||0)}</td><td>${Number(s.yellow||0)}</td><td>${Number(s.red||0)}</td>
-          <td>−${r.malus}</td><td><strong>${r.net}</strong></td>
-          <td>${r.voted ? '✅' : '❌'}</td>
-        </tr>`;
-      });
-    }
-
-    html += `</tbody></table></div>
-      <details class="bf-a35-totals"><summary>Riepilogo stagionale per player</summary>
-      <div class="bf-a35-table-wrap"><table class="bf-a35-table"><thead><tr>
-      <th>Player</th><th>Giornate</th><th>Voti</th><th>Punti voto</th><th>Malus</th><th>Netto stagione</th>
-      </tr></thead><tbody>`;
-    Object.values(playerTotals).sort((a,b)=>b.net-a.net).forEach(x => {
-      html += `<tr><td>${bfA35Escape(x.name)}</td><td>${x.played}</td><td>${x.voted}</td><td>${x.votePoints}</td><td>−${x.malus}</td><td><strong>${x.net}</strong></td></tr>`;
-    });
-    html += `</tbody></table></div></details>`;
-    root.innerHTML = html;
-  } catch (err) {
-    console.error('Storico Squadra A35.0:', err);
-    root.innerHTML = `<div class="bf-a35-error">Errore nel caricamento dello Storico Squadra: ${bfA35Escape(err.message || err)}</div>`;
-  }
-}
-
-window.openStoricoSquadraA35 = function() {
-  const root = document.getElementById('bf-a35-storico-root');
-  if (root) {
-    root.hidden = false;
-    bfA35BuildStorico();
-    root.scrollIntoView({behavior:'smooth', block:'start'});
-  }
-};
