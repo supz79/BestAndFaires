@@ -1,5 +1,5 @@
 /*
- * Best&Faires Beta.2
+ * Best&Fairest Beta.2
  * Firebase initialization only.
  * The existing Beta.1 localStorage logic is intentionally unchanged.
  *
@@ -22,5 +22,5 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-console.log("Best&Faires Beta.2: Firebase inizializzato.");
+console.log("Best&Fairest Beta.2: Firebase inizializzato.");
 console.log("Firebase project:", firebaseConfig.projectId);

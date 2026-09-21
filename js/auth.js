@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.18 - verifica email */
+/* Best&Fairest Beta.7.18 - verifica email */
 
 const loginScreen = document.querySelector('#login');
 const dashboardScreen = document.querySelector('#dashboard');
@@ -92,7 +92,7 @@ async function continueAfterVerified(user) {
   const snap = await db.collection('users').doc(user.uid).get();
   if (!snap.exists) {
     await auth.signOut();
-    showLogin('❌ Account verificato, ma non ancora presente in Best&Faires.');
+    showLogin('❌ Account verificato, ma non ancora presente in Best&Fairest.');
     return;
   }
   const userData = snap.data();
@@ -101,7 +101,7 @@ async function continueAfterVerified(user) {
     showLogin('⏳ Email verificata. La registrazione è ricevuta: l’Admin deve ancora associarti alla rosa.');
     return;
   }
-  console.log('Best&Faires Beta.7.18: utente autenticato.', {uid:user.uid,role:userData.role,leagueId:userData.leagueId,emailVerified:user.emailVerified});
+  console.log('Best&Fairest Beta.7.18: utente autenticato.', {uid:user.uid,role:userData.role,leagueId:userData.leagueId,emailVerified:user.emailVerified});
   await showAuthenticatedArea(userData);
 }
 

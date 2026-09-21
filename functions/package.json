@@ -1,6 +1,6 @@
 {
-  "name": "bestandfaires-functions",
-  "description": "Backend amministrativo Best&Faires",
+  "name": "bestandfairest-functions",
+  "description": "Backend amministrativo Best&Fairest",
   "scripts": {
     "lint": "echo 'No lint configured'"
   },

@@ -1,4 +1,4 @@
-/* Best&Faires Beta.7.20.4 - A-26 Fix visualizzazione partita dal Calendario */
+/* Best&Fairest Beta.7.20.4 - A-26 Fix visualizzazione partita dal Calendario */
 
 let players = [];
 let matches = [];
@@ -293,7 +293,7 @@ function applyLeagueTheme(){
 
 function renderLeague(){
   if(!window.currentLeagueData) return;
-  $('#leagueName').textContent=window.currentLeagueData.name||leagueTeam()||'Best&Faires';
+  $('#leagueName').textContent=window.currentLeagueData.name||leagueTeam()||'Best&Fairest';
   $('#seasonName').textContent=`Stagione ${window.currentLeagueData.season||''}`;
   applyLeagueTheme();
 }
@@ -1691,7 +1691,7 @@ async function startVoteTimer(){
   if(voteProgressTimer) clearInterval(voteProgressTimer);
   voteProgressTimer=setInterval(()=>{ if(currentMatch && isAdmin()) updateProgress(); },5000);
 }
-async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Faires Beta.19: tabellini partita e statistiche stagione.');}
+async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Fairest Beta.19: tabellini partita e statistiche stagione.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
 
 

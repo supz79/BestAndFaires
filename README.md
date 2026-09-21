@@ -1,4 +1,4 @@
-# Best&Faires Beta 7.20.4 - A-05
+# Best&Fairest Beta 7.20.4 - A-05
 
 ## Fix ricaricamento tabellino
 - La lettura delle statistiche della partita non usa più la LIST della sottocollezione `stats`.
