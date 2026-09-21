@@ -1719,3 +1719,19 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 
 /* Dettaglio voti lordi e punteggio netto nelle classifiche pubbliche */
 .ranking-score-detail{display:flex;gap:12px;flex-wrap:wrap;font-size:.82rem;opacity:.9;margin-top:3px}.ranking-score-detail span{white-space:nowrap}
+
+
+/* A35.2 - Riepilogo stagione ripristinato nello Storico Squadra. */
+.storico-season-summary{margin-top:16px;}
+.storico-season-head{margin-bottom:14px;}
+.storico-season-net{font-weight:800;}
+.storico-season-table th,.storico-season-table td{white-space:nowrap;}
+@media(max-width:760px){
+  .storico-season-summary{padding:14px;}
+  .storico-season-table{display:none;}
+  .storico-season-summary .storico-mobile-list{display:grid;}
+  .storico-season-card{margin:0;}
+}
+@media(min-width:761px){
+  .storico-season-summary .storico-mobile-list{display:none;}
+}

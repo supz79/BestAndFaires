@@ -803,6 +803,39 @@ async function renderStoricoSquadra(){
     };
     $('#storicoDaySelect').addEventListener('change',e=>renderDay(e.target.value));
     renderDay(0);
+
+    // Riepilogo totale stagione: aggrega tutte le giornate dello Storico Squadra.
+    const seasonTotals={};
+    data.forEach(x=>{
+      x.rows.filter(r=>r.eligible).forEach(r=>{
+        if(!seasonTotals[r.id]) seasonTotals[r.id]={id:r.id,name:r.name,played:0,votePoints:0,green:0,yellow:0,red:0,malus:0,net:0,voted:0};
+        const t=seasonTotals[r.id];
+        t.played+=1;
+        t.votePoints+=Number(r.votePoints)||0;
+        t.green+=Number(r.green)||0;
+        t.yellow+=Number(r.yellow)||0;
+        t.red+=Number(r.red)||0;
+        t.malus+=Number(r.malus)||0;
+        t.net+=Number(r.net)||0;
+        if(r.voted)t.voted+=1;
+      });
+    });
+    const seasonRows=Object.values(seasonTotals).sort((a,b)=>(b.net-a.net)||(b.votePoints-a.votePoints)||a.name.localeCompare(b.name));
+    const seasonBody=seasonRows.map((r,i)=>`<tr>
+      <td><b>${i+1}. ${escapeHtml(r.name)}</b></td><td>${r.played}</td><td>${r.votePoints}</td>
+      <td>${r.green}</td><td>${r.yellow}</td><td>${r.red}</td><td>−${r.malus}</td>
+      <td class="storico-season-net"><b>${r.net}</b></td><td>${r.voted}/${r.played}</td>
+    </tr>`).join('');
+    const seasonMobile=seasonRows.map((r,i)=>`<article class="storico-mobile-card storico-season-card">
+      <div class="storico-mobile-head"><b>${i+1}. ${escapeHtml(r.name)}</b><span class="storico-mobile-badge is-voted">${r.voted}/${r.played} voti</span></div>
+      <div class="storico-mobile-primary"><div><small>Punti voto</small><strong>${r.votePoints}</strong></div><div><small>Malus</small><strong>−${r.malus}</strong></div><div><small>Netto stagione</small><strong>${r.net}</strong></div></div>
+      <div class="storico-mobile-cards"><span>Giornate ${r.played}</span><span>🟩 ${r.green}</span><span>🟨 ${r.yellow}</span><span>🟥 ${r.red}</span></div>
+    </article>`).join('');
+    const seasonRoot=document.createElement('div');
+    seasonRoot.className='card storico-season-summary';
+    seasonRoot.innerHTML=`<div class="storico-season-head"><div><span class="eyebrow">STAGIONE</span><h3>📈 Riepilogo totale stagione</h3><p class="muted">Totale delle giornate in cui ogni player è stato effettivamente schierato.</p></div></div>
+      ${seasonRows.length?`<div class="storico-table-wrap"><table class="storico-table storico-season-table"><thead><tr><th>Player</th><th>Giornate</th><th>Punti voto</th><th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th><th>Netto stagione</th><th>Voti</th></tr></thead><tbody>${seasonBody}</tbody></table></div><div class="storico-mobile-list" aria-label="Riepilogo stagione mobile">${seasonMobile}</div>`:`<p class="muted">Nessun dato stagionale disponibile.</p>`}`;
+    box.appendChild(seasonRoot);
   }catch(e){
     console.error('Storico Squadra:',e);
     box.innerHTML='<div class="card"><p class="muted">Impossibile caricare lo Storico Squadra.</p></div>';
