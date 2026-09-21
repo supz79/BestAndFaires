@@ -1705,3 +1705,14 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 
 
 /* A-34.7 - Correzione Verde Hockey: abilita modifica del campo Verdi e allinea le 6 statistiche stagionali. */
+
+/* A34.8 - Partecipazione al voto visibile solo all'Admin */
+.vote-participation{margin-top:14px;border:1px solid var(--border,#dfe7e2);border-radius:14px;overflow:hidden;background:var(--surface,#fff)}
+.vote-participation-title{padding:10px 12px;font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--primary-soft,#effaf3);border-bottom:1px solid var(--border,#dfe7e2)}
+.vote-participation-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 12px;border-bottom:1px solid var(--border,#dfe7e2);font-size:.9rem}
+.vote-participation-row:last-child{border-bottom:0}
+.vote-participation-name{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vote-participation-status{font-size:.78rem;white-space:nowrap;font-weight:700}
+.vote-participation-row.has-voted .vote-participation-status{color:var(--primary,#159447)}
+.vote-participation-row.not-voted .vote-participation-status{color:var(--muted,#5a7463)}
+@media(max-width:520px){.vote-participation-row{align-items:flex-start;flex-direction:column;gap:3px}}

@@ -701,16 +701,16 @@ function renderMatch(){
 
   const adminVoteCard=$('#adminVotingCard');
   if(adminVoteCard){
-    const showAdmin = isAdmin() && String(currentMatch.status||'')==='finished' && votingWindowOpen(currentMatch);
+    const showAdmin = isAdmin() && String(currentMatch.status||'')==='finished';
     adminVoteCard.classList.toggle('hidden', !showAdmin);
     adminVoteCard.classList.toggle('admin-only', false);
     const at=$('#adminVoteTimer');
     if(at){
-      at.textContent = showAdmin ? `⏱️ Tempo residuo: ${formatCountdown(votingRemainingMs(currentMatch))}` : (currentMatch.votingClosed===true ? '🔒 Votazioni chiuse dall’Admin' : '');
-      at.className = showAdmin ? 'pill open' : 'pill closed';
+      at.textContent = showAdmin && votingWindowOpen(currentMatch) ? `⏱️ Tempo residuo: ${formatCountdown(votingRemainingMs(currentMatch))}` : (currentMatch.votingClosed===true ? '🔒 Votazioni chiuse dall’Admin' : '🔒 Finestra di voto terminata');
+      at.className = showAdmin && votingWindowOpen(currentMatch) ? 'pill open' : 'pill closed';
     }
     const cb=$('#closeVotingBtn');
-    if(cb){ cb.disabled=!showAdmin; cb.textContent=currentMatch.votingClosed===true ? '🔒 Votazioni chiuse' : '🔒 Chiudi votazioni'; }
+    if(cb){ const canClose=showAdmin && votingWindowOpen(currentMatch); cb.disabled=!canClose; cb.textContent=currentMatch.votingClosed===true ? '🔒 Votazioni chiuse' : '🔒 Chiudi votazioni'; }
     const msg=$('#adminVoteMsg');
     if(msg) msg.textContent=currentMatch.votingClosed===true ? '✅ La finestra di voto è stata chiusa.' : '';
   }
@@ -1006,25 +1006,41 @@ function renderPlayers(){
   }).join('')||'<p class="muted">Nessun giocatore.</p>';
   renderSeasonStats();
 }
-function updateProgress(){
+async function updateProgress(){
   if(!currentMatch)return; const total=lineup.length;
   if(!isAdmin()){
     $('#voteProgress').style.width='0%';
     $('#voteCount').textContent=`${total} giocatori in distinta`;
     return;
   }
-  db.collection('matches').doc(currentMatch.id).collection('votes').get().then(s=>{
-    const voted=s.size;
+  try{
+    const snap=await db.collection('matches').doc(currentMatch.id).collection('votes').get();
+    const votedIds=new Set(snap.docs.map(d=>String(d.id)));
+    const rosterPlayers=players.filter(p=>lineup.includes(p.id));
+    const voted=rosterPlayers.filter(p=>p.userId && votedIds.has(String(p.userId))).length;
     const label=`${voted} / ${total} giocatori hanno votato`;
     $('#voteProgress').style.width=(total?Math.min(100,voted/total*100):0)+'%';
     $('#voteCount').textContent=label;
-    // La stessa informazione deve essere visibile anche nel pannello
-    // "Gestione votazione" dell'Admin.
     const adminCount=$('#adminVoteCount');
     if(adminCount) adminCount.textContent=label;
-  }).catch(err=>{
-    console.error('Aggiornamento conteggio voti:',err);
-  });
+
+    const participation=$('#adminVoteParticipation');
+    if(participation){
+      if(!rosterPlayers.length){
+        participation.innerHTML='<p class="muted">Nessun giocatore presente in distinta.</p>';
+      }else{
+        const rows=rosterPlayers.map(p=>{
+          const hasVoted=!!p.userId && votedIds.has(String(p.userId));
+          return `<div class="vote-participation-row ${hasVoted?'has-voted':'not-voted'}"><span class="vote-participation-name">${escapeHtml(playerName(p))}</span><span class="vote-participation-status">${hasVoted?'✓ Ha votato':'○ Non ha votato'}</span></div>`;
+        }).join('');
+        participation.innerHTML=`<div class="vote-participation-title">Partecipazione dei giocatori</div>${rows}`;
+      }
+    }
+  }catch(err){
+    console.error('Aggiornamento partecipazione voti:',err);
+    const participation=$('#adminVoteParticipation');
+    if(participation) participation.innerHTML='<p class="muted">Impossibile caricare la partecipazione al voto.</p>';
+  }
 }
 
 // ---------- Registrazioni e rosa Admin ----------
