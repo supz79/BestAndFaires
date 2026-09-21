@@ -243,5 +243,43 @@
 <script src="js/firebase.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/app.js?v=7.43"></script>
+
+<style>
+.bf-a35-header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:18px 0}
+.bf-a35-header h2{margin:0 0 4px}.bf-a35-header p{margin:0;opacity:.72}
+.bf-a35-summary{display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:12px;margin:14px 0 18px}
+.bf-a35-summary div{padding:14px;border-radius:14px;background:rgba(127,127,127,.10);text-align:center}
+.bf-a35-summary b{display:block;font-size:1.35rem}.bf-a35-summary span{font-size:.82rem;opacity:.72}
+.bf-a35-table-wrap{overflow:auto;border-radius:14px}
+.bf-a35-table{width:100%;border-collapse:collapse;min-width:780px}
+.bf-a35-table th,.bf-a35-table td{padding:9px 10px;border-bottom:1px solid rgba(127,127,127,.18);text-align:center}
+.bf-a35-table th:nth-child(1),.bf-a35-table td:nth-child(1),.bf-a35-table th:nth-child(2),.bf-a35-table td:nth-child(2){text-align:left}
+.bf-a35-totals{margin-top:18px}.bf-a35-totals summary{cursor:pointer;font-weight:700;padding:10px 0}
+.bf-a35-loading,.bf-a35-error{padding:18px;border-radius:14px;background:rgba(127,127,127,.10)}
+</style>
+<section id="bf-a35-storico-root" hidden aria-label="Storico Squadra"></section>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  const host = document.getElementById('bf-a35-storico-root');
+  if (!host) return;
+  const adminCandidates = Array.from(document.querySelectorAll('button,a'));
+  const existing = adminCandidates.find(el => /partecipazione votazioni/i.test(el.textContent||''));
+  if (existing) {
+    existing.textContent = '📊 Storico Squadra';
+    existing.removeAttribute('onclick');
+    existing.addEventListener('click', function(e){ e.preventDefault(); window.openStoricoSquadraA35(); });
+  } else {
+    const adminArea = document.querySelector('#admin-view, .admin-view, [data-view="admin"], main');
+    if (adminArea) {
+      const btn = document.createElement('button');
+      btn.type='button'; btn.textContent='📊 Storico Squadra';
+      btn.className='btn';
+      btn.addEventListener('click', function(){ window.openStoricoSquadraA35(); });
+      adminArea.insertBefore(btn, adminArea.firstChild);
+    }
+  }
+});
+</script>
+
 </body>
 </html>
