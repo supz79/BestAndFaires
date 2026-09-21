@@ -27,7 +27,35 @@
 .storico-day-total{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding-top:12px}
 .storico-filter{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
 .storico-filter select{min-width:180px}
-@media(max-width:700px){.storico-table{min-width:760px}.storico-day-head{align-items:flex-start;flex-direction:column}}
+@media(max-width:700px){
+  .storico-table{min-width:760px}
+  .storico-day-head{align-items:flex-start;flex-direction:column}
+}
+.storico-mobile-list{display:none}
+.storico-mobile-card{padding:14px;border:1px solid rgba(127,127,127,.16);border-radius:16px;background:var(--surface,#fff);box-shadow:0 4px 14px rgba(0,0,0,.04)}
+.storico-mobile-card + .storico-mobile-card{margin-top:10px}
+.storico-mobile-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px}
+.storico-mobile-head b{font-size:.98rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.storico-mobile-badge{font-size:.72rem;font-weight:700;white-space:nowrap}
+.storico-mobile-badge.is-voted{color:var(--primary,#159447)}
+.storico-mobile-badge.not-voted{color:var(--muted,#5a7463)}
+.storico-mobile-primary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.storico-mobile-primary>div{padding:9px 7px;border-radius:12px;background:rgba(127,127,127,.07);text-align:center}
+.storico-mobile-primary small,.storico-mobile-grid small{display:block;font-size:.68rem;opacity:.68;margin-bottom:2px}
+.storico-mobile-primary strong{font-size:1.05rem}
+.storico-mobile-cards{display:flex;gap:7px;margin-top:9px;font-size:.78rem;opacity:.82}
+.storico-mobile-cards span{padding:4px 7px;border-radius:999px;background:rgba(127,127,127,.07)}
+.storico-mobile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.storico-mobile-grid>div{text-align:center;padding:8px;border-radius:10px;background:rgba(127,127,127,.06)}
+@media(max-width:700px){
+  .storico-table-wrap{display:none}
+  .storico-mobile-list{display:block;margin-top:14px}
+}
+@media(max-width:380px){
+  .storico-mobile-card{padding:12px}
+  .storico-mobile-head{align-items:flex-start;flex-direction:column;gap:4px}
+  .storico-mobile-primary{gap:5px}
+  .storico-mobile-primary>div{padding:8px 4px}
+}
 </style>
 </head>
 <body>
@@ -204,7 +232,6 @@
       </div>
     </div>
     <div id="storicoSquadraList"></div>
-    <div id="bf-a35-season-summary"></div>
   </section>
 
 <section id="calendar" class="screen">

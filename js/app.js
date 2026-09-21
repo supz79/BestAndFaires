@@ -730,44 +730,14 @@ function storicoScoreLabel(m,summary){
 
 async function renderStoricoSquadra(){
   const box=$('#storicoSquadraList');
-  const seasonBox=$('#bf-a35-season-summary');
   if(!box || !isAdmin()) return;
   box.innerHTML='<div class="card"><p class="muted">Caricamento Storico Squadra…</p></div>';
-  if(seasonBox) seasonBox.innerHTML='';
   try{
     const data=await loadStoricoSquadraData();
     if(!data.length){
       box.innerHTML='<div class="card"><p class="muted">Non ci sono ancora giornate con una distinta registrata.</p></div>';
-      if(seasonBox) seasonBox.innerHTML='';
       return;
     }
-
-    // Aggregazione stagionale: usa esclusivamente le righe effettivamente schierate.
-    const totals={};
-    data.forEach(x=>{
-      x.rows.filter(r=>r.eligible).forEach(r=>{
-        if(!totals[r.id]){
-          totals[r.id]={
-            id:r.id, name:r.name, played:0, votePoints:0,
-            green:0, yellow:0, red:0, malus:0, net:0, voted:0
-          };
-        }
-        const t=totals[r.id];
-        t.played += 1;
-        t.votePoints += Number(r.votePoints)||0;
-        t.green += Number(r.green)||0;
-        t.yellow += Number(r.yellow)||0;
-        t.red += Number(r.red)||0;
-        t.malus += Number(r.malus)||0;
-        t.net += Number(r.net)||0;
-        if(r.voted) t.voted += 1;
-      });
-    });
-
-    const seasonRows=Object.values(totals).sort((a,b)=>
-      b.net-a.net || b.votePoints-a.votePoints || a.name.localeCompare(b.name,'it')
-    );
-
     const options=data.map((x,i)=>`<option value="${i}">${escapeHtml(storicoDayLabel(x.match))} · ${escapeHtml(x.match.opponent||x.match.awayTeam||'Partita')}</option>`).join('');
     box.innerHTML=`
       <div class="card">
@@ -777,7 +747,6 @@ async function renderStoricoSquadra(){
         </div>
       </div>
       <div id="storicoDayContent"></div>`;
-
     const renderDay=(idx)=>{
       const x=data[Number(idx)]||data[0];
       const rows=x.rows;
@@ -792,6 +761,19 @@ async function renderStoricoSquadra(){
           <td>−${r.malus}</td><td class="storico-net">${r.net}</td>
           <td class="storico-status">${r.voted?'✓ Ha votato':'○ Non ha votato'}</td>
         </tr>`;
+      }).join('');
+      const mobileCards=rows.map(r=>{
+        if(!r.eligible){
+          return `<article class="storico-mobile-card not-lineup">
+            <div class="storico-mobile-head"><b>${escapeHtml(r.name)}</b><span class="storico-mobile-badge muted">— Non schierato</span></div>
+            <div class="storico-mobile-grid"><div><small>Punti voto</small><strong>—</strong></div><div><small>Malus</small><strong>—</strong></div><div><small>Netto</small><strong>—</strong></div></div>
+          </article>`;
+        }
+        return `<article class="storico-mobile-card">
+          <div class="storico-mobile-head"><b>${escapeHtml(r.name)}</b><span class="storico-mobile-badge ${r.voted?'is-voted':'not-voted'}">${r.voted?'✓ Ha votato':'○ Non ha votato'}</span></div>
+          <div class="storico-mobile-primary"><div><small>Punti voto</small><strong>${r.votePoints}</strong></div><div><small>Malus</small><strong>−${r.malus}</strong></div><div><small>Netto</small><strong>${r.net}</strong></div></div>
+          <div class="storico-mobile-cards"><span>🟩 ${r.green}</span><span>🟨 ${r.yellow}</span><span>🟥 ${r.red}</span></div>
+        </article>`;
       }).join('');
       const el=$('#storicoDayContent');
       el.innerHTML=`
@@ -811,6 +793,7 @@ async function renderStoricoSquadra(){
               <tbody>${body}</tbody>
             </table>
           </div>
+          <div class="storico-mobile-list" aria-label="Verifica mobile giocatori">${mobileCards}</div>
           <div class="storico-day-total">
             <span class="storico-metric">Verdi −2 cad.</span>
             <span class="storico-metric">Gialli −5 cad.</span>
@@ -818,51 +801,11 @@ async function renderStoricoSquadra(){
           </div>
         </div>`;
     };
-
     $('#storicoDaySelect').addEventListener('change',e=>renderDay(e.target.value));
     renderDay(0);
-
-    // Il riepilogo stagionale resta separato dal dettaglio giornata,
-    // ma viene mostrato nella stessa sezione Admin subito sotto di esso.
-    if(seasonBox){
-      seasonBox.innerHTML=`
-        <div class="card bf-a35-season-card">
-          <div class="bf-a35-season-head">
-            <div>
-              <span class="eyebrow">STAGIONE</span>
-              <h3>📈 Riepilogo totale stagione</h3>
-              <p class="muted">Totale delle giornate in cui ogni player è stato effettivamente schierato.</p>
-            </div>
-          </div>
-          <div class="bf-a35-season-table-wrap">
-            <table class="bf-a35-season-table">
-              <thead><tr>
-                <th>Player</th><th>Giornate</th><th>Punti voto</th>
-                <th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th>
-                <th>Netto stagione</th><th>Voti</th>
-              </tr></thead>
-              <tbody>
-                ${seasonRows.length ? seasonRows.map(x=>`<tr>
-                  <td><b>${escapeHtml(x.name)}</b></td>
-                  <td>${x.played}</td>
-                  <td>${x.votePoints}</td>
-                  <td>${x.green}</td>
-                  <td>${x.yellow}</td>
-                  <td>${x.red}</td>
-                  <td>−${x.malus}</td>
-                  <td class="bf-a35-season-net"><strong>${x.net}</strong></td>
-                  <td>${x.voted}/${x.played}</td>
-                </tr>`).join('') :
-                '<tr><td colspan="9" class="muted" style="text-align:center">Nessun dato disponibile.</td></tr>'}
-              </tbody>
-            </table>
-          </div>
-        </div>`;
-    }
   }catch(e){
     console.error('Storico Squadra:',e);
     box.innerHTML='<div class="card"><p class="muted">Impossibile caricare lo Storico Squadra.</p></div>';
-    if(seasonBox) seasonBox.innerHTML='';
   }
 }
 
@@ -1092,11 +1035,20 @@ async function syncPublicResultsForAdmin(){
       votesSnap.forEach(doc=>{
         (doc.data().ranking||[]).forEach((id,i)=>{
           if(!presentIds.has(id)) return;
-          if(!totals[id]) totals[id]={points:0,first:0,second:0,third:0,votes:0};
+          if(!totals[id]) totals[id]={points:0,first:0,second:0,third:0,votes:0,malus:0,net:0};
           totals[id].points+=3-i;
           totals[id].votes++;
           totals[id][['first','second','third'][i]]++;
         });
+      });
+      // Pubblica anche il malus, così tutti possono vedere punti voto e netto.
+      statsSnap.forEach(doc=>{
+        if(!presentIds.has(doc.id)) return;
+        const st=doc.data()||{};
+        const malus=Number(st.green||0)*2 + Number(st.yellow||0)*5 + Number(st.red||0)*10;
+        if(!totals[doc.id]) totals[doc.id]={points:0,first:0,second:0,third:0,votes:0,malus:0,net:0};
+        totals[doc.id].malus=malus;
+        totals[doc.id].net=totals[doc.id].points-malus;
       });
       const resultSnap=await db.collection('matches').doc(m.id).collection('publicResults').get();
       const batch=db.batch();
@@ -1134,6 +1086,8 @@ async function calculateRanking(){
       map[doc.id].first=Number(d.first||0);
       map[doc.id].second=Number(d.second||0);
       map[doc.id].third=Number(d.third||0);
+      map[doc.id].malus=Number(d.malus||0);
+      map[doc.id].net=map[doc.id].points-map[doc.id].malus;
     });
     return Object.values(map)
       .filter(p=>lineup.includes(p.id))
@@ -1154,9 +1108,11 @@ async function calculateRanking(){
     map[d.id].first+=Number(d.first||0);
     map[d.id].second+=Number(d.second||0);
     map[d.id].third+=Number(d.third||0);
+    map[d.id].malus+=Number(d.malus||0);
   });
+  Object.values(map).forEach(p=>p.net=p.points-p.malus);
   return Object.values(map)
-    .sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
+    .sort((a,b)=>b.net-a.net||b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
 }
 async function recalculatePublicResults(){
   if(!isAdmin()) return;
@@ -1190,7 +1146,8 @@ async function renderRanking(){
     <div class="ranking-podium-item podium-${i+1}">
       <div class="ranking-medal">${medalLabels[i]}</div>
       <div class="ranking-podium-name">${escapeHtml(playerName(p))}</div>
-      <div class="ranking-podium-points">${p.points} <span>pt</span></div>
+      <div class="ranking-podium-points">${p.net} <span>pt netti</span></div>
+      <div class="ranking-score-detail"><span>Voti: <b>${p.points}</b> pt</span><span>Malus: <b>−${p.malus}</b> pt</span></div>
       <div class="ranking-vote-breakdown"><span>🥇 ${p.first}</span><span>🥈 ${p.second}</span><span>🥉 ${p.third}</span></div>
     </div>`).join('');
 
@@ -1199,9 +1156,10 @@ async function renderRanking(){
       <span class="ranking-position">${i+4}</span>
       <div class="ranking-player-info">
         <b>${escapeHtml(playerName(p))}</b>
+        <span class="ranking-score-detail"><span>Voti: <b>${p.points}</b> pt</span><span>Malus: <b>−${p.malus}</b> pt</span></span>
         <span class="ranking-vote-breakdown"><span>🥇 ${p.first}</span><span>🥈 ${p.second}</span><span>🥉 ${p.third}</span></span>
       </div>
-      <span class="ranking-list-points">${p.points} <small>pt</small></span>
+      <span class="ranking-list-points">${p.net} <small>pt netti</small></span>
     </div>`).join('');
 
   $('#rankingTable').innerHTML=`
@@ -1764,3 +1722,46 @@ async function startVoteTimer(){
 }
 async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Fairest Beta.19: tabellini partita e statistiche stagione.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
+
+
+
+/* A35.2 RIEPILOGO STAGIONE */
+function bfA352RenderSeasonSummary(playerTotals) {
+  const root = document.getElementById('bf-a35-season-summary');
+  if (!root) return;
+  const totals = Object.values(playerTotals || {}).sort((a,b) => (b.net||0) - (a.net||0));
+  let out = `
+    <div class="bf-a352-card">
+      <div class="bf-a352-title">
+        <div>
+          <h3>📈 Riepilogo totale stagione</h3>
+          <p>Totale delle giornate in cui ogni player è stato effettivamente schierato.</p>
+        </div>
+      </div>
+      <div class="bf-a352-table-wrap">
+        <table class="bf-a352-table">
+          <thead><tr>
+            <th>Player</th><th>Giornate</th><th>Punti voto</th>
+            <th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th>
+            <th>Netto stagione</th><th>Voti</th>
+          </tr></thead><tbody>`;
+  if (!totals.length) {
+    out += `<tr><td colspan="9" class="bf-a352-empty">Nessun dato disponibile.</td></tr>`;
+  } else {
+    totals.forEach(x => {
+      out += `<tr>
+        <td class="bf-a352-player">${bfA35Escape(x.name)}</td>
+        <td>${x.played || 0}</td>
+        <td>${x.votePoints || 0}</td>
+        <td>${x.green || 0}</td>
+        <td>${x.yellow || 0}</td>
+        <td>${x.red || 0}</td>
+        <td>−${x.malus || 0}</td>
+        <td class="bf-a352-net"><strong>${x.net || 0}</strong></td>
+        <td>${x.voted || 0}/${x.played || 0}</td>
+      </tr>`;
+    });
+  }
+  out += `</tbody></table></div></div>`;
+  root.innerHTML = out;
+}

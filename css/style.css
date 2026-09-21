@@ -1717,51 +1717,5 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 .vote-participation-row.not-voted .vote-participation-status{color:var(--muted,#5a7463)}
 @media(max-width:520px){.vote-participation-row{align-items:flex-start;flex-direction:column;gap:3px}}
 
-/* A35.x · Riepilogo totale stagione */
-.bf-a35-season-card{
-  margin-top:16px;
-}
-.bf-a35-season-head{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:16px;
-  margin-bottom:14px;
-}
-.bf-a35-season-head h3{
-  margin:4px 0 4px;
-}
-.bf-a35-season-table-wrap{
-  width:100%;
-  overflow-x:auto;
-  -webkit-overflow-scrolling:touch;
-}
-.bf-a35-season-table{
-  width:100%;
-  border-collapse:collapse;
-  min-width:760px;
-}
-.bf-a35-season-table th,
-.bf-a35-season-table td{
-  padding:10px 12px;
-  text-align:center;
-  border-bottom:1px solid var(--border,#e5e7eb);
-  white-space:nowrap;
-}
-.bf-a35-season-table th:first-child,
-.bf-a35-season-table td:first-child{
-  text-align:left;
-}
-.bf-a35-season-table th{
-  font-size:.78rem;
-  text-transform:uppercase;
-  letter-spacing:.04em;
-  opacity:.78;
-}
-.bf-a35-season-table tbody tr:last-child td{
-  border-bottom:0;
-}
-.bf-a35-season-net{
-  font-weight:700;
-}
-
+/* Dettaglio voti lordi e punteggio netto nelle classifiche pubbliche */
+.ranking-score-detail{display:flex;gap:12px;flex-wrap:wrap;font-size:.82rem;opacity:.9;margin-top:3px}.ranking-score-detail span{white-space:nowrap}
