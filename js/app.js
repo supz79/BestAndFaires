@@ -1693,3 +1693,46 @@ async function startVoteTimer(){
 }
 async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Faires Beta.19: tabellini partita e statistiche stagione.');}
 window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
+
+
+
+/* A35.2 RIEPILOGO STAGIONE */
+function bfA352RenderSeasonSummary(playerTotals) {
+  const root = document.getElementById('bf-a35-season-summary');
+  if (!root) return;
+  const totals = Object.values(playerTotals || {}).sort((a,b) => (b.net||0) - (a.net||0));
+  let out = `
+    <div class="bf-a352-card">
+      <div class="bf-a352-title">
+        <div>
+          <h3>📈 Riepilogo totale stagione</h3>
+          <p>Totale delle giornate in cui ogni player è stato effettivamente schierato.</p>
+        </div>
+      </div>
+      <div class="bf-a352-table-wrap">
+        <table class="bf-a352-table">
+          <thead><tr>
+            <th>Player</th><th>Giornate</th><th>Punti voto</th>
+            <th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th>
+            <th>Netto stagione</th><th>Voti</th>
+          </tr></thead><tbody>`;
+  if (!totals.length) {
+    out += `<tr><td colspan="9" class="bf-a352-empty">Nessun dato disponibile.</td></tr>`;
+  } else {
+    totals.forEach(x => {
+      out += `<tr>
+        <td class="bf-a352-player">${bfA35Escape(x.name)}</td>
+        <td>${x.played || 0}</td>
+        <td>${x.votePoints || 0}</td>
+        <td>${x.green || 0}</td>
+        <td>${x.yellow || 0}</td>
+        <td>${x.red || 0}</td>
+        <td>−${x.malus || 0}</td>
+        <td class="bf-a352-net"><strong>${x.net || 0}</strong></td>
+        <td>${x.voted || 0}/${x.played || 0}</td>
+      </tr>`;
+    });
+  }
+  out += `</tbody></table></div></div>`;
+  root.innerHTML = out;
+}
