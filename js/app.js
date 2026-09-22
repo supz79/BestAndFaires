@@ -1084,7 +1084,16 @@ async function syncPublicResultsForAdmin(){
         const malus=green*2 + yellow*5 + red*10;
         if(!totals[doc.id]) totals[doc.id]={points:0,first:0,second:0,third:0,votes:0,malus:0,net:0};
         totals[doc.id].malus=malus;
-        totals[doc.id].net=totals[doc.id].points-malus;
+        totals[doc.id].net=statNum(totals[doc.id].points)-malus;
+      });
+      // Ogni giocatore schierato deve avere un aggregato completo, anche se
+      // non ha ricevuto voti e anche se il vecchio publicResults non contiene
+      // ancora i campi malus/net.
+      presentIds.forEach(id=>{
+        if(!totals[id]) totals[id]={points:0,first:0,second:0,third:0,votes:0,malus:0,net:0};
+        totals[id].points=statNum(totals[id].points);
+        totals[id].malus=statNum(totals[id].malus);
+        totals[id].net=totals[id].points-totals[id].malus;
       });
       const resultSnap=await db.collection('matches').doc(m.id).collection('publicResults').get();
       const batch=db.batch();
@@ -1106,7 +1115,7 @@ async function calculateRanking(){
   // prima di leggere la classifica. In questo modo eventuali cancellazioni
   // manuali di documenti /votes non possono lasciare risultati fantasma.
   if(isAdmin()) await syncPublicResultsForAdmin();
-  const map=Object.fromEntries(players.map(p=>[p.id,{...p,points:0,votes:0,first:0,second:0,third:0}]));
+  const map=Object.fromEntries(players.map(p=>[p.id,{...p,points:0,votes:0,first:0,second:0,third:0,malus:0,net:0}]));
   if(!currentMatch) return [];
   const activeTab=document.querySelector('.tab.active')?.dataset.tab || 'day';
 
@@ -1123,7 +1132,7 @@ async function calculateRanking(){
       map[doc.id].second=statNum(d.second);
       map[doc.id].third=statNum(d.third);
       map[doc.id].malus=statNum(d.malus);
-      map[doc.id].net=map[doc.id].points-map[doc.id].malus;
+      map[doc.id].net=statNum(map[doc.id].points)-statNum(map[doc.id].malus);
     });
     return Object.values(map)
       .filter(p=>lineup.includes(p.id))
@@ -1146,7 +1155,11 @@ async function calculateRanking(){
     map[d.id].third+=statNum(d.third);
     map[d.id].malus+=statNum(d.malus);
   });
-  Object.values(map).forEach(p=>p.net=p.points-p.malus);
+  Object.values(map).forEach(p=>{
+    p.points=statNum(p.points);
+    p.malus=statNum(p.malus);
+    p.net=p.points-p.malus;
+  });
   return Object.values(map)
     .sort((a,b)=>b.net-a.net||b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
 }
@@ -1178,6 +1191,12 @@ async function renderRanking(){
     return;
   }
 
+  rows.forEach(p=>{
+    p.points=statNum(p.points);
+    p.malus=statNum(p.malus);
+    p.net=p.points-p.malus;
+    p.first=statNum(p.first); p.second=statNum(p.second); p.third=statNum(p.third);
+  });
   const podium=rows.slice(0,3).map((p,i)=>`
     <div class="ranking-podium-item podium-${i+1}">
       <div class="ranking-medal">${medalLabels[i]}</div>
