@@ -783,7 +783,8 @@ async function loadStoricoSquadraData(){
     const sortedEligibleRows=sortDailyTeamRanking(rows.filter(r=>r.eligible));
     const nonEligibleRows=rows.filter(r=>!r.eligible);
     const sortedRows=[...sortedEligibleRows,...nonEligibleRows];
-    const teamVotePoints=sortedEligibleRows.reduce((s,r)=>s+(r.votePoints||0),0);
+    const eligibleRows=sortedEligibleRows;
+    const teamVotePoints=eligibleRows.reduce((s,r)=>s+(r.votePoints||0),0);
     const teamMalus=eligibleRows.reduce((s,r)=>s+(r.malus||0),0);
     const teamNet=teamVotePoints-teamMalus;
     const votedCount=eligibleRows.filter(r=>r.voted).length;
