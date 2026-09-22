@@ -46,6 +46,61 @@ function isAdmin(){ return window.currentUserData?.role === 'admin' || window.cu
 function isPlayer(){ return window.currentUserData?.role === 'player'; }
 function uid(){ return firebase.auth().currentUser?.uid || ''; }
 function leagueId(){ return window.currentUserData?.leagueId || 'demo'; }
+const DEFAULT_PLAYER_VISIBILITY={match:true,played:true,players:true,rankingDay:false,rankingSeason:false};
+function playerVisibility(){ return Object.assign({},DEFAULT_PLAYER_VISIBILITY,window.currentLeagueData?.playerVisibility||{}); }
+function playerCanSeeScreen(screen){
+  if(!isPlayer()) return true;
+  const v=playerVisibility();
+  if(screen==='match') return v.match!==false;
+  if(screen==='played') return v.played!==false;
+  if(screen==='players') return v.players!==false;
+  if(screen==='ranking') return v.rankingDay!==false || v.rankingSeason!==false;
+  return true;
+}
+function applyPlayerVisibility(){
+  if(!isPlayer()) return;
+  const v=playerVisibility();
+  const map={match:v.match!==false,played:v.played!==false,players:v.players!==false,ranking:(v.rankingDay!==false||v.rankingSeason!==false)};
+  Object.entries(map).forEach(([screen,visible])=>{
+    document.querySelectorAll(`[data-screen="${screen}"]`).forEach(el=>el.classList.toggle('hidden',!visible));
+  });
+  if(isPlayer()){
+    document.querySelectorAll('#ranking .tab[data-tab="day"]').forEach(el=>el.classList.toggle('hidden',v.rankingDay===false));
+    document.querySelectorAll('#ranking .tab[data-tab="season"]').forEach(el=>el.classList.toggle('hidden',v.rankingSeason===false));
+  }
+  if(!map.ranking && $('#ranking')?.classList.contains('active')) show('dashboard');
+}
+async function renderPlayerVisibilityForm(){
+  const form=$('#playerVisibilityForm');
+  if(!form||!isAdmin()) return;
+  const v=playerVisibility();
+  $('#visMatch').checked=v.match!==false;
+  $('#visPlayed').checked=v.played!==false;
+  $('#visPlayers').checked=v.players!==false;
+  $('#visRankingDay').checked=v.rankingDay!==false;
+  $('#visRankingSeason').checked=v.rankingSeason!==false;
+}
+async function savePlayerVisibility(e){
+  e.preventDefault(); if(!isAdmin()) return;
+  const data={
+    match:$('#visMatch').checked,
+    played:$('#visPlayed').checked,
+    players:$('#visPlayers').checked,
+    rankingDay:$('#visRankingDay').checked,
+    rankingSeason:$('#visRankingSeason').checked
+  };
+  const msg=$('#playerVisibilityMsg');
+  try{
+    await db.collection('leagues').doc(leagueId()).update({playerVisibility:data,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    window.currentLeagueData=Object.assign({},window.currentLeagueData,{playerVisibility:data});
+    applyPlayerVisibility();
+    if(msg) msg.textContent='✅ Visibilità Player salvata.';
+  }catch(err){
+    console.error('Visibilità Player:',err);
+    if(msg) msg.textContent='❌ Impossibile salvare la visibilità.';
+  }
+}
+
 function leagueTeam(){ return window.currentLeagueData?.teamName || 'Squadra'; }
 function localTeam(){ return leagueTeam(); }
 
@@ -185,6 +240,9 @@ async function loadMatches(){
 }
 
 function renderDashboard(){
+  const matchAction=document.querySelector('[data-screen="match"]');
+  if(matchAction){ const b=matchAction.querySelector('b'); const sm=matchAction.querySelector('small'); if(isPlayer()){if(b)b.textContent='Distinta di Gara';if(sm)sm.textContent='Distinta e votazione';}else{if(b)b.textContent='Gestisci partita';if(sm)sm.textContent='Distinta e votazione';} }
+  applyPlayerVisibility();
   const title=$('#matchTitle'), state=$('#voteState'), progress=$('#dashboardProgress'), eyebrow=$('#matchEyebrow');
   if(!title)return;
   if(!currentMatch){
@@ -238,7 +296,7 @@ async function loadLeague(){
 async function refresh(){
   try{
     await loadLeague(); await loadPlayers(); await loadMatches();
-    renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar(); await renderAdminPlayers(); await loadPendingRegistrations(); await renderAdminManagement();
+    renderLeague(); renderDashboard(); applyPlayerVisibility(); renderMatch(); renderPlayers(); renderCalendar(); await renderAdminPlayers(); await loadPendingRegistrations(); await renderAdminManagement(); await renderPlayerVisibilityForm();
     await syncPublicResultsForAdmin();
     await renderRanking();
     // Dopo il login aspettiamo che Firebase Auth abbia una sessione realmente
@@ -333,7 +391,7 @@ async function renderPlayedMatches(){
 
   // Vista compatta: inizialmente viene mostrata solo una riga per partita.
   // Il dettaglio completo viene caricato e aperto solo al click sulla singola partita.
-  box.innerHTML=`<div class="card"><p class="muted">Clicca su una partita per aprire il risultato completo, le statistiche e l\'MVP.</p></div>`+
+  box.innerHTML=`<div class="card"><p class="muted">Clicca su una partita per aprire il risultato completo e le statistiche.</p></div>`+
     finished.map(m=>{
       const phase=String(m.fase||'Andata');
       const round=m.giornata||m.day||'';
@@ -385,10 +443,11 @@ async function loadPlayedMatchDetails(matchId, card){
         ? `⭐ MVP ex aequo: <b>${escapeHtml(playerName(mvp))}</b> e <b>${escapeHtml(playerName(players.find(p=>p.id===top[1][0])||{}))}</b>`
         : `⭐ MVP: <b>${escapeHtml(playerName(mvp))}</b> <span class="sub">${top[0][1].points||0} pt</span>`)
       : '⭐ MVP: non disponibile';
+    const showPlayerVotes=!isPlayer();
     const rows=played.map(id=>{
       const p=players.find(x=>x.id===id); if(!p) return '';
       const st=statMap[id]||{}; const r=results[id]||{};
-      return `<div class="played-player-row"><b>${escapeHtml(playerName(p))}</b><span>${statNum(st.goals)}</span><span>${statNum(st.assists)}</span><span>${statNum(st.green)}</span><span>${statNum(st.yellow)}</span><span>${statNum(st.red)}</span><span>${statNum(r.points)} pt</span></div>`;
+      return `<div class="played-player-row"><b>${escapeHtml(playerName(p))}</b><span>${statNum(st.goals)}</span><span>${statNum(st.assists)}</span><span>${statNum(st.green)}</span><span>${statNum(st.yellow)}</span><span>${statNum(st.red)}</span>${showPlayerVotes?`<span>${statNum(r.points)} pt</span>`:''}</div>`;
     }).join('');
     const scorers=[];
     played.forEach(id=>{
@@ -399,7 +458,7 @@ async function loadPlayedMatchDetails(matchId, card){
       ? `<div class="scorers-line"><b>⚽ Marcatori:</b> ${scorers.map(n=>escapeHtml(n)).join(', ')}</div>`
       : '';
 
-    body.innerHTML=`<div class="played-score">${matchScoreText(m,summary)}</div>${scorersText}<div class="mvp-box">${mvpText}</div><div class="played-stats"><div class="played-player-row played-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Verdi</span><span>Gialli</span><span>Rossi</span><span>Voto</span></div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}</div>`;
+    body.innerHTML=`<div class="played-score">${matchScoreText(m,summary)}</div>${scorersText}${!isPlayer()?`<div class="mvp-box">${mvpText}</div>`:''}<div class="played-stats"><div class="played-player-row played-header"><span>Giocatore</span><span>Gol</span><span>Assist</span><span>Verdi</span><span>Gialli</span><span>Rossi</span>${!isPlayer()?'<span>Voto</span>':''}</div>${rows||'<p class="muted">Nessuna statistica registrata.</p>'}</div>`;
     card.dataset.loaded='1';
   }catch(e){
     console.error('Dettaglio partita disputata:',e);
@@ -1422,6 +1481,7 @@ async function changePlayerEmail(userId){
 }
 
 document.querySelector('#addPlayerForm')?.addEventListener('submit',addPlayerFromAdmin);
+document.querySelector('#playerVisibilityForm')?.addEventListener('submit',savePlayerVisibility);
 
 // ---------- Calendario Admin ----------
 function renderCalendar(){
@@ -1698,7 +1758,7 @@ $('#importCommit')?.addEventListener('click',commitImport);
 $('#importCancel')?.addEventListener('click',()=>{$('#importPreviewCard').classList.add('hidden');calendarDraft=[];$('#excelInput').value='';});
 
 function show(id){
-  if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return; if(id==='storicoSquadra'&&!isAdmin())return;
+  if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return; if(id==='storicoSquadra'&&!isAdmin())return; if(!playerCanSeeScreen(id))return;
   if(id==='dashboard'){
     // La Home deve sempre ricalcolare la propria partita principale.
     // Aprire un vecchio match dal Calendario non deve trascinarlo nella Home.

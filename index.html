@@ -141,7 +141,7 @@
       <button class="action card" data-screen="match"><span>📋</span><b>Gestisci partita</b><small>Distinta e votazione</small></button>
       <button class="action card" data-screen="ranking"><span>🏆</span><b>Classifiche</b><small>Giornata e cumulativa</small></button>
       <button class="action card" data-screen="players"><span>👥</span><b>Rosa squadra</b><small>Giocatori registrati</small></button>
-      <button class="action card" data-screen="played"><span>🏟️</span><b>Partite disputate</b><small>Risultati, statistiche e MVP</small></button>
+      <button class="action card" data-screen="played"><span>🏟️</span><b>Partite disputate</b><small>Risultati e statistiche</small></button>
       <button class="action card admin-only" data-screen="admin"><span>⚙️</span><b>Amministrazione</b><small>Gestione lega</small></button>
       <button class="action card admin-only" data-screen="calendar"><span>📅</span><b>Calendario</b><small>Importa e modifica le partite</small></button> <button class="action card admin-only" data-screen="storicoSquadra"><span>📊</span><b>Storico Squadra</b><small>Voti, malus e partecipazione</small></button>
     </div>
@@ -278,6 +278,19 @@
       <p class="muted">Gli aggregati pubblici vengono ricostruiti a partire dai voti effettivamente presenti in Firebase. Usa il ricalcolo dopo eventuali interventi manuali sui documenti.</p>
       <button id="recalculateResultsBtn" class="primary">🔄 Ricalcola classifiche</button>
     </div>
+    <div class="card">
+      <h3>👁️ Visibilità Player</h3>
+      <p class="muted">Scegli quali sezioni della Home devono essere visibili agli account Player. Le impostazioni valgono per tutta la lega.</p>
+      <form id="playerVisibilityForm" class="form-grid">
+        <label><input type="checkbox" id="visMatch"> 📋 Distinta di Gara</label>
+        <label><input type="checkbox" id="visPlayed"> 🏟️ Partite disputate</label>
+        <label><input type="checkbox" id="visPlayers"> 👥 Rosa squadra</label>
+        <label><input type="checkbox" id="visRankingDay"> 🏆 Classifica giornaliera</label>
+        <label><input type="checkbox" id="visRankingSeason"> 🏆 Classifica cumulativa</label>
+        <div class="modal-actions" style="grid-column:1/-1"><button class="primary" type="submit">💾 Salva visibilità Player</button></div>
+      </form>
+      <p id="playerVisibilityMsg" class="success"></p>
+    </div>
     <div class="card superadmin-only hidden">
       <h3>👑 Gestione Admin</h3>
       <p class="muted">Solo il Super Admin può promuovere o rimuovere il ruolo Admin. Il Super Admin non può essere modificato dagli Admin ordinari.</p>
@@ -312,7 +325,7 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/firebase.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/app.js?v=8.02"></script>
+<script src="js/app.js?v=8.03"></script>
 
 <style>
 .bf-a352-card{margin-top:24px;padding:18px;border-radius:18px;background:rgba(127,127,127,.07);border:1px solid rgba(127,127,127,.16)}
