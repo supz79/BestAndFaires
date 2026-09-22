@@ -58,18 +58,22 @@ function playerCanSeeScreen(screen){
   return true;
 }
 function applyPlayerVisibility(){
-  if(!isPlayer()) return;
+  // La visibilità è una preferenza che vale solo per i Player.
+  // Dopo un logout/login la stessa pagina resta in memoria: se un Player
+  // aveva nascosto una sezione, l'Admin successivo non deve ereditarne
+  // la classe CSS `hidden`.
   const v=playerVisibility();
   const map={match:v.match!==false,played:v.played!==false,players:v.players!==false,storicoSquadra:v.storicoSquadra!==false};
-  Object.entries(map).forEach(([screen,visible])=>{
+  const effectiveMap=isPlayer()?map:{match:true,played:true,players:true,storicoSquadra:true};
+  Object.entries(effectiveMap).forEach(([screen,visible])=>{
     document.querySelectorAll(`[data-screen="${screen}"]`).forEach(el=>el.classList.toggle('hidden',!visible));
   });
-  // Classifiche Squadra è una schermata vera e propria, non solo un pulsante: 
-  // quando l'Admin la disabilita deve sparire anche la schermata e non deve
-  // essere raggiungibile tramite navigazione interna.
+  // Classifiche Squadra è una schermata vera e propria, non solo un pulsante.
+  // Per Admin/SuperAdmin deve essere sempre visibile; per Player segue la
+  // preferenza salvata dall'Admin.
   const storicoScreen=document.getElementById('storicoSquadra');
-  if(storicoScreen) storicoScreen.classList.toggle('hidden',!map.storicoSquadra);
-  if(!map.storicoSquadra && document.getElementById('storicoSquadra')?.classList.contains('active')){
+  if(storicoScreen) storicoScreen.classList.toggle('hidden',!effectiveMap.storicoSquadra);
+  if(isPlayer() && !effectiveMap.storicoSquadra && storicoScreen?.classList.contains('active')){
     show('dashboard',true);
   }
 }
