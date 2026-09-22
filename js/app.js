@@ -64,6 +64,14 @@ function applyPlayerVisibility(){
   Object.entries(map).forEach(([screen,visible])=>{
     document.querySelectorAll(`[data-screen="${screen}"]`).forEach(el=>el.classList.toggle('hidden',!visible));
   });
+  // Classifiche Squadra è una schermata vera e propria, non solo un pulsante: 
+  // quando l'Admin la disabilita deve sparire anche la schermata e non deve
+  // essere raggiungibile tramite navigazione interna.
+  const storicoScreen=document.getElementById('storicoSquadra');
+  if(storicoScreen) storicoScreen.classList.toggle('hidden',!map.storicoSquadra);
+  if(!map.storicoSquadra && document.getElementById('storicoSquadra')?.classList.contains('active')){
+    show('dashboard',true);
+  }
 }
 async function renderPlayerVisibilityForm(){
   const form=$('#playerVisibilityForm');
@@ -1664,8 +1672,9 @@ $('#excelInput')?.addEventListener('change',e=>handleExcel(e.target.files?.[0]))
 $('#importCommit')?.addEventListener('click',commitImport);
 $('#importCancel')?.addEventListener('click',()=>{$('#importPreviewCard').classList.add('hidden');calendarDraft=[];$('#excelInput').value='';});
 
-function show(id){
-  if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return; if(!playerCanSeeScreen(id))return;
+function show(id,force=false){
+  if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return;
+  if(!force && !playerCanSeeScreen(id))return;
   if(id==='dashboard'){
     // La Home deve sempre ricalcolare la propria partita principale.
     // Aprire un vecchio match dal Calendario non deve trascinarlo nella Home.
