@@ -715,7 +715,7 @@ async function renderSeasonStats(){
 }
 
 
-// ---------- A35.0 · Storico Squadra Admin ----------
+// ---------- A35.0 · Classifiche Squadra Admin ----------
 async function loadStoricoSquadraData(){
   if(!isAdmin()) return [];
   const ordered=[...matches].sort((a,b)=>(parseDateTime(a)?.getTime()||0)-(parseDateTime(b)?.getTime()||0));
@@ -791,7 +791,7 @@ function storicoScoreLabel(m,summary){
 async function renderStoricoSquadra(){
   const box=$('#storicoSquadraList');
   if(!box || !isAdmin()) return;
-  box.innerHTML='<div class="card"><p class="muted">Caricamento Storico Squadra…</p></div>';
+  box.innerHTML='<div class="card"><p class="muted">Caricamento Classifiche Squadra…</p></div>';
   try{
     const data=await loadStoricoSquadraData();
     if(!data.length){
@@ -864,7 +864,7 @@ async function renderStoricoSquadra(){
     $('#storicoDaySelect').addEventListener('change',e=>renderDay(e.target.value));
     renderDay(0);
 
-    // Riepilogo totale stagione: aggrega tutte le giornate dello Storico Squadra.
+    // Riepilogo totale stagione: aggrega tutte le giornate dello Classifiche Squadra.
     const seasonTotals={};
     data.forEach(x=>{
       x.rows.filter(r=>r.eligible).forEach(r=>{
@@ -897,8 +897,8 @@ async function renderStoricoSquadra(){
       ${seasonRows.length?`<div class="storico-table-wrap"><table class="storico-table storico-season-table"><thead><tr><th>Player</th><th>Giornate</th><th>Punti voto</th><th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th><th>Netto stagione</th><th>Voti</th></tr></thead><tbody>${seasonBody}</tbody></table></div><div class="storico-mobile-list" aria-label="Riepilogo stagione mobile">${seasonMobile}</div>`:`<p class="muted">Nessun dato stagionale disponibile.</p>`}`;
     box.appendChild(seasonRoot);
   }catch(e){
-    console.error('Storico Squadra:',e);
-    box.innerHTML='<div class="card"><p class="muted">Impossibile caricare lo Storico Squadra.</p></div>';
+    console.error('Classifiche Squadra:',e);
+    box.innerHTML='<div class="card"><p class="muted">Impossibile caricare lo Classifiche Squadra.</p></div>';
   }
 }
 
