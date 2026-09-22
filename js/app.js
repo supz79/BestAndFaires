@@ -46,7 +46,7 @@ function isAdmin(){ return window.currentUserData?.role === 'admin' || window.cu
 function isPlayer(){ return window.currentUserData?.role === 'player'; }
 function uid(){ return firebase.auth().currentUser?.uid || ''; }
 function leagueId(){ return window.currentUserData?.leagueId || 'demo'; }
-const DEFAULT_PLAYER_VISIBILITY={match:true,played:true,players:true};
+const DEFAULT_PLAYER_VISIBILITY={match:true,played:true,players:true,storicoSquadra:true};
 function playerVisibility(){ return Object.assign({},DEFAULT_PLAYER_VISIBILITY,window.currentLeagueData?.playerVisibility||{}); }
 function playerCanSeeScreen(screen){
   if(!isPlayer()) return true;
@@ -54,13 +54,13 @@ function playerCanSeeScreen(screen){
   if(screen==='match') return v.match!==false;
   if(screen==='played') return v.played!==false;
   if(screen==='players') return v.players!==false;
-  if(screen==='storicoSquadra') return true;
+  if(screen==='storicoSquadra') return v.storicoSquadra!==false;
   return true;
 }
 function applyPlayerVisibility(){
   if(!isPlayer()) return;
   const v=playerVisibility();
-  const map={match:v.match!==false,played:v.played!==false,players:v.players!==false,storicoSquadra:true};
+  const map={match:v.match!==false,played:v.played!==false,players:v.players!==false,storicoSquadra:v.storicoSquadra!==false};
   Object.entries(map).forEach(([screen,visible])=>{
     document.querySelectorAll(`[data-screen="${screen}"]`).forEach(el=>el.classList.toggle('hidden',!visible));
   });
@@ -72,13 +72,15 @@ async function renderPlayerVisibilityForm(){
   $('#visMatch').checked=v.match!==false;
   $('#visPlayed').checked=v.played!==false;
   $('#visPlayers').checked=v.players!==false;
+  $('#visStoricoSquadra').checked=v.storicoSquadra!==false;
 }
 async function savePlayerVisibility(e){
   e.preventDefault(); if(!isAdmin()) return;
   const data={
     match:$('#visMatch').checked,
     played:$('#visPlayed').checked,
-    players:$('#visPlayers').checked
+    players:$('#visPlayers').checked,
+    storicoSquadra:$('#visStoricoSquadra').checked
   };
   const msg=$('#playerVisibilityMsg');
   try{
