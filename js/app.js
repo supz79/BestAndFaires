@@ -239,6 +239,32 @@ async function loadMatches(){
   selectHomeMatch();
 }
 
+
+// A36.6: ordinamento classifiche giornaliere.
+// Criterio: punti ricevuti dai voti DESC, poi malus ASC (meno malus),
+// poi netto DESC, infine nome alfabetico.
+function sortDailyTeamRanking(rows) {
+  return [...rows].sort((a, b) => {
+    const pointsA = Number(a.points ?? a.votePoints ?? a.votesPoints ?? 0) || 0;
+    const pointsB = Number(b.points ?? b.votePoints ?? b.votesPoints ?? 0) || 0;
+
+    const malusA = Number(a.malus ?? 0) || 0;
+    const malusB = Number(b.malus ?? 0) || 0;
+
+    const netA = Number(a.net ?? a.netScore ?? (pointsA - malusA)) || 0;
+    const netB = Number(b.net ?? b.netScore ?? (pointsB - malusB)) || 0;
+
+    if (pointsA !== pointsB) return pointsB - pointsA;
+    if (malusA !== malusB) return malusA - malusB;
+    if (netA !== netB) return netB - netA;
+
+    const nameA = String(a.playerName ?? a.name ?? '').trim();
+    const nameB = String(b.playerName ?? b.name ?? '').trim();
+    return nameA.localeCompare(nameB, 'it', { sensitivity: 'base' });
+  });
+}
+
+
 function renderDashboard(){
   const matchAction=document.querySelector('[data-screen="match"]');
   if(matchAction){ const b=matchAction.querySelector('b'); const sm=matchAction.querySelector('small'); if(isPlayer()){if(b)b.textContent='Distinta di Gara';if(sm)sm.textContent='Distinta e votazione';}else{if(b)b.textContent='Gestisci partita';if(sm)sm.textContent='Distinta e votazione';} }
