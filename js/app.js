@@ -1078,7 +1078,10 @@ async function syncPublicResultsForAdmin(){
       statsSnap.forEach(doc=>{
         if(!presentIds.has(doc.id)) return;
         const st=doc.data()||{};
-        const malus=Number(st.green||0)*2 + Number(st.yellow||0)*5 + Number(st.red||0)*10;
+        const green=statNum(st.green);
+        const yellow=statNum(st.yellow);
+        const red=statNum(st.red);
+        const malus=green*2 + yellow*5 + red*10;
         if(!totals[doc.id]) totals[doc.id]={points:0,first:0,second:0,third:0,votes:0,malus:0,net:0};
         totals[doc.id].malus=malus;
         totals[doc.id].net=totals[doc.id].points-malus;
@@ -1114,12 +1117,12 @@ async function calculateRanking(){
     snap.forEach(doc=>{
       if(!map[doc.id]) return;
       const d=doc.data()||{};
-      map[doc.id].points=Number(d.points||0);
-      map[doc.id].votes=Number(d.votes||0);
-      map[doc.id].first=Number(d.first||0);
-      map[doc.id].second=Number(d.second||0);
-      map[doc.id].third=Number(d.third||0);
-      map[doc.id].malus=Number(d.malus||0);
+      map[doc.id].points=statNum(d.points);
+      map[doc.id].votes=statNum(d.votes);
+      map[doc.id].first=statNum(d.first);
+      map[doc.id].second=statNum(d.second);
+      map[doc.id].third=statNum(d.third);
+      map[doc.id].malus=statNum(d.malus);
       map[doc.id].net=map[doc.id].points-map[doc.id].malus;
     });
     return Object.values(map)
@@ -1136,12 +1139,12 @@ async function calculateRanking(){
   }));
   results.flat().forEach(d=>{
     if(!map[d.id]) return;
-    map[d.id].points+=Number(d.points||0);
-    map[d.id].votes+=Number(d.votes||0);
-    map[d.id].first+=Number(d.first||0);
-    map[d.id].second+=Number(d.second||0);
-    map[d.id].third+=Number(d.third||0);
-    map[d.id].malus+=Number(d.malus||0);
+    map[d.id].points+=statNum(d.points);
+    map[d.id].votes+=statNum(d.votes);
+    map[d.id].first+=statNum(d.first);
+    map[d.id].second+=statNum(d.second);
+    map[d.id].third+=statNum(d.third);
+    map[d.id].malus+=statNum(d.malus);
   });
   Object.values(map).forEach(p=>p.net=p.points-p.malus);
   return Object.values(map)
