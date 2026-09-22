@@ -41,7 +41,8 @@ window.resetMatchViewCache = resetMatchViewCache;
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
-function isAdmin(){ return window.currentUserData?.role === 'admin'; }
+function isSuperAdmin(){ return window.currentUserData?.role === 'superAdmin'; }
+function isAdmin(){ return window.currentUserData?.role === 'admin' || window.currentUserData?.role === 'superAdmin'; }
 function isPlayer(){ return window.currentUserData?.role === 'player'; }
 function uid(){ return firebase.auth().currentUser?.uid || ''; }
 function leagueId(){ return window.currentUserData?.leagueId || 'demo'; }
@@ -237,7 +238,7 @@ async function loadLeague(){
 async function refresh(){
   try{
     await loadLeague(); await loadPlayers(); await loadMatches();
-    renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar(); await renderAdminPlayers(); await loadPendingRegistrations();
+    renderLeague(); renderDashboard(); renderMatch(); renderPlayers(); renderCalendar(); await renderAdminPlayers(); await loadPendingRegistrations(); await renderAdminManagement();
     await syncPublicResultsForAdmin();
     await renderRanking();
     // Dopo il login aspettiamo che Firebase Auth abbia una sessione realmente
@@ -695,7 +696,7 @@ async function loadStoricoSquadraData(){
       const green=eligible?statNum(s.green):null;
       const yellow=eligible?statNum(s.yellow):null;
       const red=eligible?statNum(s.red):null;
-      const malus=eligible?(green*2+yellow*5+red*10):null;
+      const malus=eligible?(green * 1+yellow * 3+red*10):null;
       const net=eligible?(vp-malus):null;
       const voted=eligible && !!p.userId && Object.prototype.hasOwnProperty.call(
         Object.fromEntries(Object.keys(votes).map(k=>[k,true])), String(p.userId)
@@ -795,8 +796,8 @@ async function renderStoricoSquadra(){
           </div>
           <div class="storico-mobile-list" aria-label="Verifica mobile giocatori">${mobileCards}</div>
           <div class="storico-day-total">
-            <span class="storico-metric">Verdi −2 cad.</span>
-            <span class="storico-metric">Gialli −5 cad.</span>
+            <span class="storico-metric">Verdi −1 cad.</span>
+            <span class="storico-metric">Gialli −3 cad.</span>
             <span class="storico-metric">Rossi −10 cad.</span>
           </div>
         </div>`;
@@ -1013,14 +1014,22 @@ $('#submitVote')?.addEventListener('click',async()=>{
       const snaps=await Promise.all(resultRefs.map(ref=>tx.get(ref)));
       snaps.forEach((snap,i)=>{
         const playerId=ranking[i];
-        const old=snap.exists?snap.data():{points:0,first:0,second:0,third:0,votes:0};
+        const old=snap.exists?snap.data():{points:0,first:0,second:0,third:0,votes:0,malus:0,net:0};
         const inc={points:3-i,first:i===0?1:0,second:i===1?1:0,third:i===2?1:0,votes:1};
+        // Il voto aggiorna soltanto i punti ricevuti. Malus e netto devono
+        // sopravvivere all'aggiornamento e il netto va sempre ricalcolato.
+        // Se il documento proviene da una versione precedente, il malus
+        // mancante viene considerato 0 e verrà poi riallineato dall'Admin.
+        const points=(old.points||0)+inc.points;
+        const malus=statNum(old.malus);
         tx.set(resultRefs[i],{
-          points:(old.points||0)+inc.points,
+          points,
           first:(old.first||0)+inc.first,
           second:(old.second||0)+inc.second,
           third:(old.third||0)+inc.third,
-          votes:(old.votes||0)+inc.votes
+          votes:(old.votes||0)+inc.votes,
+          malus,
+          net:points-malus
         });
       });
       tx.set(voteRef,{ranking});
@@ -1081,7 +1090,7 @@ async function syncPublicResultsForAdmin(){
         const green=statNum(st.green);
         const yellow=statNum(st.yellow);
         const red=statNum(st.red);
-        const malus=green*2 + yellow*5 + red*10;
+        const malus=green * 1 + yellow * 3 + red*10;
         if(!totals[doc.id]) totals[doc.id]={points:0,first:0,second:0,third:0,votes:0,malus:0,net:0};
         totals[doc.id].malus=malus;
         totals[doc.id].net=statNum(totals[doc.id].points)-malus;
@@ -1338,6 +1347,44 @@ async function renderAdminPlayers(){
     console.error('Render gestione rosa:',e);
     box.innerHTML='<p class="muted">Impossibile caricare gli account associati.</p>';
   }
+}
+
+async function renderAdminManagement(){
+  const box=$('#adminManagementList');
+  if(!box || !isSuperAdmin()) return;
+  try{
+    const snap=await db.collection('users').get();
+    const users=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .filter(u=>u.active===true && u.id!==uid() && (u.role==='admin'||u.role==='player'))
+      .sort((a,b)=>String(a.cognome||a.nome||'').localeCompare(String(b.cognome||b.nome||''),'it'));
+    if(!users.length){ box.innerHTML='<p class="muted">Nessun altro account attivo da gestire.</p>'; return; }
+    box.innerHTML=users.map(u=>{
+      const name=[u.nome,u.cognome].filter(Boolean).join(' ')||u.email||'Utente';
+      const isAdm=u.role==='admin';
+      const label=isAdm?'🛡️ Admin':'👤 Player';
+      const action=isAdm
+        ? `<button class="small-btn" data-demote-admin="${escapeHtml(u.id)}">Rimuovi ruolo Admin</button>`
+        : `<button class="small-btn" data-promote-admin="${escapeHtml(u.id)}">Promuovi ad Admin</button>`;
+      return `<div class="admin-user-row"><span class="admin-avatar">${escapeHtml((name.match(/\b\p{L}/gu)||[]).slice(0,2).join('').toUpperCase())}</span><div class="admin-user-main"><b>${escapeHtml(name)}</b><span class="sub admin-account">${label} · ${escapeHtml(u.email||'email non disponibile')}</span></div><div class="admin-user-action">${action}</div></div>`;
+    }).join('');
+    box.querySelectorAll('[data-promote-admin]').forEach(btn=>btn.addEventListener('click',()=>setAdminRole(btn.dataset.promoteAdmin,'admin')));
+    box.querySelectorAll('[data-demote-admin]').forEach(btn=>btn.addEventListener('click',()=>setAdminRole(btn.dataset.demoteAdmin,'player')));
+  }catch(e){ console.error('Gestione Admin:',e); box.innerHTML='<p class="muted">Impossibile caricare gli account amministrabili.</p>'; }
+}
+async function setAdminRole(userId,nextRole){
+  if(!isSuperAdmin()||!userId||!['admin','player'].includes(nextRole)) return;
+  try{
+    const ref=db.collection('users').doc(userId); const snap=await ref.get();
+    if(!snap.exists){ alert('Utente non trovato.'); return; }
+    const u=snap.data()||{};
+    if(u.role==='superAdmin'){ alert('Il Super Admin non può essere modificato da questa funzione.'); return; }
+    const name=[u.nome,u.cognome].filter(Boolean).join(' ')||u.email||'questo utente';
+    const text=nextRole==='admin'?`Confermi di promuovere ${name} ad Admin?`:`Confermi di rimuovere il ruolo Admin a ${name}?`;
+    if(!confirm(text)) return;
+    await ref.update({role:nextRole});
+    await renderAdminManagement();
+    alert(nextRole==='admin'?'✅ Utente promosso ad Admin.':'✅ Ruolo Admin rimosso.');
+  }catch(e){ console.error('Cambio ruolo Admin:',e); alert('❌ Impossibile modificare il ruolo.'); }
 }
 
 async function changePlayerEmail(userId){
@@ -1776,7 +1823,7 @@ async function startVoteTimer(){
   voteProgressTimer=setInterval(()=>{ if(currentMatch && isAdmin()) updateProgress(); },5000);
 }
 async function bootApp(){if(!window.currentUserData)return;await loadLeague();await refresh();startVoteTimer();console.log('Best&Fairest Beta.19: tabellini partita e statistiche stagione.');}
-window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='admin'));await bootApp();};
+window.applyRolePermissions=async userData=>{window.currentUserData=userData;document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',!(userData?.role==='admin'||userData?.role==='superAdmin')));document.querySelectorAll('.superadmin-only').forEach(b=>b.classList.toggle('hidden',userData?.role!=='superAdmin'));await bootApp();};
 
 
 

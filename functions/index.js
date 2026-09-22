@@ -30,7 +30,7 @@ exports.updatePlayerEmail = onCall(async (request) => {
   }
 
   const caller = callerSnap.data() || {};
-  if (caller.role !== 'admin' || caller.active !== true) {
+  if (!['admin', 'superAdmin'].includes(caller.role) || caller.active !== true) {
     throw new HttpsError('permission-denied', 'Operazione riservata agli Admin.');
   }
 

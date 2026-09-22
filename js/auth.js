@@ -26,7 +26,7 @@ async function showAuthenticatedArea(userData) {
   dashboardScreen.classList.add('active');
   hideSessionBoot();
   const name = userData?.nome || userData?.displayName || firebase.auth().currentUser?.email || 'Utente';
-  roleBtn.textContent = userData?.role === 'admin' ? 'Admin · Esci' : `${name} · Esci`;
+  roleBtn.textContent = userData?.role === 'superAdmin' ? 'Super Admin · Esci' : (userData?.role === 'admin' ? 'Admin · Esci' : `${name} · Esci`);
 }
 
 function showLogin(message='') {
