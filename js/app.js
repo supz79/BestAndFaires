@@ -241,27 +241,15 @@ async function loadMatches(){
 }
 
 
-// A36.6: ordinamento classifiche giornaliere.
-// Criterio: punti ricevuti dai voti DESC, poi malus ASC (meno malus),
-// poi netto DESC, infine nome alfabetico.
+// A36.10: ordinamento classifica giornaliera.
+// L'unico criterio di ordinamento è il punteggio ricevuto dai voti, in ordine decrescente.
+// Malus e netto NON influenzano in alcun modo la posizione in classifica.
+// A parità di punti viene mantenuto l'ordine originale dei giocatori.
 function sortDailyTeamRanking(rows) {
   return [...rows].sort((a, b) => {
     const pointsA = Number(a.points ?? a.votePoints ?? a.votesPoints ?? 0) || 0;
     const pointsB = Number(b.points ?? b.votePoints ?? b.votesPoints ?? 0) || 0;
-
-    const malusA = Number(a.malus ?? 0) || 0;
-    const malusB = Number(b.malus ?? 0) || 0;
-
-    const netA = Number(a.net ?? a.netScore ?? (pointsA - malusA)) || 0;
-    const netB = Number(b.net ?? b.netScore ?? (pointsB - malusB)) || 0;
-
-    if (pointsA !== pointsB) return pointsB - pointsA;
-    if (malusA !== malusB) return malusA - malusB;
-    if (netA !== netB) return netB - netA;
-
-    const nameA = String(a.playerName ?? a.name ?? '').trim();
-    const nameB = String(b.playerName ?? b.name ?? '').trim();
-    return nameA.localeCompare(nameB, 'it', { sensitivity: 'base' });
+    return pointsB - pointsA;
   });
 }
 
@@ -790,13 +778,17 @@ async function loadStoricoSquadraData(){
       return {id,name:playerName(p),eligible,voted,votePoints:vp,green,yellow,red,malus,net};
     });
 
-    const eligibleRows=rows.filter(r=>r.eligible);
-    const teamVotePoints=eligibleRows.reduce((s,r)=>s+(r.votePoints||0),0);
+    // La classifica giornaliera deve essere determinata esclusivamente dai punti voto.
+    // I giocatori non schierati restano in coda e non partecipano alla graduatoria dei voti.
+    const sortedEligibleRows=sortDailyTeamRanking(rows.filter(r=>r.eligible));
+    const nonEligibleRows=rows.filter(r=>!r.eligible);
+    const sortedRows=[...sortedEligibleRows,...nonEligibleRows];
+    const teamVotePoints=sortedEligibleRows.reduce((s,r)=>s+(r.votePoints||0),0);
     const teamMalus=eligibleRows.reduce((s,r)=>s+(r.malus||0),0);
     const teamNet=teamVotePoints-teamMalus;
     const votedCount=eligibleRows.filter(r=>r.voted).length;
     const summary=summarySnap.exists?(summarySnap.data()||{}):{};
-    out.push({match:m,rows,teamVotePoints,teamMalus,teamNet,votedCount,eligibleCount:eligibleRows.length,summary});
+    out.push({match:m,rows:sortedRows,teamVotePoints,teamMalus,teamNet,votedCount,eligibleCount:sortedEligibleRows.length,summary});
   }
   return out;
 }
