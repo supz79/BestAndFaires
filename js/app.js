@@ -46,7 +46,7 @@ function isAdmin(){ return window.currentUserData?.role === 'admin' || window.cu
 function isPlayer(){ return window.currentUserData?.role === 'player'; }
 function uid(){ return firebase.auth().currentUser?.uid || ''; }
 function leagueId(){ return window.currentUserData?.leagueId || 'demo'; }
-const DEFAULT_PLAYER_VISIBILITY={match:true,played:true,players:true,rankingDay:false,rankingSeason:false};
+const DEFAULT_PLAYER_VISIBILITY={match:true,played:true,players:true};
 function playerVisibility(){ return Object.assign({},DEFAULT_PLAYER_VISIBILITY,window.currentLeagueData?.playerVisibility||{}); }
 function playerCanSeeScreen(screen){
   if(!isPlayer()) return true;
@@ -54,21 +54,16 @@ function playerCanSeeScreen(screen){
   if(screen==='match') return v.match!==false;
   if(screen==='played') return v.played!==false;
   if(screen==='players') return v.players!==false;
-  if(screen==='ranking') return v.rankingDay!==false || v.rankingSeason!==false;
+  if(screen==='storicoSquadra') return true;
   return true;
 }
 function applyPlayerVisibility(){
   if(!isPlayer()) return;
   const v=playerVisibility();
-  const map={match:v.match!==false,played:v.played!==false,players:v.players!==false,ranking:(v.rankingDay!==false||v.rankingSeason!==false)};
+  const map={match:v.match!==false,played:v.played!==false,players:v.players!==false,storicoSquadra:true};
   Object.entries(map).forEach(([screen,visible])=>{
     document.querySelectorAll(`[data-screen="${screen}"]`).forEach(el=>el.classList.toggle('hidden',!visible));
   });
-  if(isPlayer()){
-    document.querySelectorAll('#ranking .tab[data-tab="day"]').forEach(el=>el.classList.toggle('hidden',v.rankingDay===false));
-    document.querySelectorAll('#ranking .tab[data-tab="season"]').forEach(el=>el.classList.toggle('hidden',v.rankingSeason===false));
-  }
-  if(!map.ranking && $('#ranking')?.classList.contains('active')) show('dashboard');
 }
 async function renderPlayerVisibilityForm(){
   const form=$('#playerVisibilityForm');
@@ -77,17 +72,13 @@ async function renderPlayerVisibilityForm(){
   $('#visMatch').checked=v.match!==false;
   $('#visPlayed').checked=v.played!==false;
   $('#visPlayers').checked=v.players!==false;
-  $('#visRankingDay').checked=v.rankingDay!==false;
-  $('#visRankingSeason').checked=v.rankingSeason!==false;
 }
 async function savePlayerVisibility(e){
   e.preventDefault(); if(!isAdmin()) return;
   const data={
     match:$('#visMatch').checked,
     played:$('#visPlayed').checked,
-    players:$('#visPlayers').checked,
-    rankingDay:$('#visRankingDay').checked,
-    rankingSeason:$('#visRankingSeason').checked
+    players:$('#visPlayers').checked
   };
   const msg=$('#playerVisibilityMsg');
   try{
@@ -267,7 +258,7 @@ function sortDailyTeamRanking(rows) {
 
 function renderDashboard(){
   const matchAction=document.querySelector('[data-screen="match"]');
-  if(matchAction){ const b=matchAction.querySelector('b'); const sm=matchAction.querySelector('small'); if(isPlayer()){if(b)b.textContent='Distinta di Gara';if(sm)sm.textContent='Distinta e votazione';}else{if(b)b.textContent='Gestisci partita';if(sm)sm.textContent='Distinta e votazione';} }
+  if(matchAction){ const b=matchAction.querySelector('b'); const sm=matchAction.querySelector('small'); if(isPlayer()){if(b)b.textContent='Distinta di Gara';if(sm)sm.textContent='Distinta e votazione';}else{if(b)b.textContent='Distinta di Gara';if(sm)sm.textContent='Distinta e votazione';} }
   applyPlayerVisibility();
   const title=$('#matchTitle'), state=$('#voteState'), progress=$('#dashboardProgress'), eyebrow=$('#matchEyebrow');
   if(!title)return;
@@ -743,28 +734,28 @@ async function renderSeasonStats(){
 
 // ---------- A35.0 · Classifiche Squadra Admin ----------
 async function loadStoricoSquadraData(){
-  if(!isAdmin()) return [];
+  if(!isAdmin() && !isPlayer()) return [];
   const ordered=[...matches].sort((a,b)=>(parseDateTime(a)?.getTime()||0)-(parseDateTime(b)?.getTime()||0));
   const out=[];
   for(const m of ordered){
     if(!Array.isArray(m.lineup) || !m.lineup.length) continue;
-    const [statsSnap,votesSnap,summarySnap]=await Promise.all([
+    const reads=[
       db.collection('matches').doc(m.id).collection('stats').get(),
-      db.collection('matches').doc(m.id).collection('votes').get(),
+      db.collection('matches').doc(m.id).collection('publicResults').get(),
       db.collection('matches').doc(m.id).collection('summary').doc('main').get()
-    ]);
+    ];
+    if(isAdmin()) reads.push(db.collection('matches').doc(m.id).collection('votes').get());
+    const snaps=await Promise.all(reads);
+    const statsSnap=snaps[0], publicResultsSnap=snaps[1], summarySnap=snaps[2];
     const stats={};
     statsSnap.forEach(d=>stats[d.id]=d.data()||{});
+    const publicResults={};
+    publicResultsSnap.forEach(d=>publicResults[d.id]=d.data()||{});
     const votes={};
-    votesSnap.forEach(d=>votes[d.id]=d.data()||{});
+    if(isAdmin() && snaps[3]) snaps[3].forEach(d=>votes[d.id]=d.data()||{});
     const pointsByPlayer={};
-    Object.values(votes).forEach(v=>{
-      const ranking=Array.isArray(v.ranking)?v.ranking:[];
-      ranking.slice(0,3).forEach((playerId,i)=>{
-        if(!pointsByPlayer[playerId]) pointsByPlayer[playerId]={points:0,votes:0};
-        pointsByPlayer[playerId].points += 3-i;
-        pointsByPlayer[playerId].votes += 1;
-      });
+    Object.entries(publicResults).forEach(([playerId,r])=>{
+      pointsByPlayer[playerId]={points:statNum(r.points),votes:statNum(r.votes)};
     });
 
     const eligibleIds=new Set(
@@ -816,7 +807,7 @@ function storicoScoreLabel(m,summary){
 
 async function renderStoricoSquadra(){
   const box=$('#storicoSquadraList');
-  if(!box || !isAdmin()) return;
+  if(!box || (!isAdmin() && !isPlayer())) return;
   box.innerHTML='<div class="card"><p class="muted">Caricamento Classifiche Squadra…</p></div>';
   try{
     const data=await loadStoricoSquadraData();
@@ -838,14 +829,14 @@ async function renderStoricoSquadra(){
       const rows=x.rows;
       const body=rows.map(r=>{
         if(!r.eligible){
-          return `<tr class="not-lineup"><td>${escapeHtml(r.name)}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="storico-status">— Non schierato</td></tr>`;
+          return `<tr class="not-lineup"><td>${escapeHtml(r.name)}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>${isAdmin()?'<td class="storico-status">— Non schierato</td>':''}</tr>`;
         }
         return `<tr>
           <td><b>${escapeHtml(r.name)}</b></td>
           <td>${r.votePoints}</td>
           <td>${r.green}</td><td>${r.yellow}</td><td>${r.red}</td>
           <td>−${r.malus}</td><td class="storico-net">${r.net}</td>
-          <td class="storico-status">${r.voted?'✓ Ha votato':'○ Non ha votato'}</td>
+          ${isAdmin()?`<td class="storico-status">${r.voted?'✓ Ha votato':'○ Non ha votato'}</td>`:''}
         </tr>`;
       }).join('');
       const mobileCards=rows.map(r=>{
@@ -856,7 +847,7 @@ async function renderStoricoSquadra(){
           </article>`;
         }
         return `<article class="storico-mobile-card">
-          <div class="storico-mobile-head"><b>${escapeHtml(r.name)}</b><span class="storico-mobile-badge ${r.voted?'is-voted':'not-voted'}">${r.voted?'✓ Ha votato':'○ Non ha votato'}</span></div>
+          <div class="storico-mobile-head"><b>${escapeHtml(r.name)}</b>${isAdmin()?`<span class="storico-mobile-badge ${r.voted?'is-voted':'not-voted'}">${r.voted?'✓ Ha votato':'○ Non ha votato'}</span>`:''}</div>
           <div class="storico-mobile-primary"><div><small>Punti voto</small><strong>${r.votePoints}</strong></div><div><small>Malus</small><strong>−${r.malus}</strong></div><div><small>Netto</small><strong>${r.net}</strong></div></div>
           <div class="storico-mobile-cards"><span>🟩 ${r.green}</span><span>🟨 ${r.yellow}</span><span>🟥 ${r.red}</span></div>
         </article>`;
@@ -871,11 +862,11 @@ async function renderStoricoSquadra(){
             <span class="storico-metric">🗳️ Punti votazioni <b>${x.teamVotePoints}</b></span>
             <span class="storico-metric">➖ Malus <b>−${x.teamMalus}</b></span>
             <span class="storico-metric">🏆 Netto <b>${x.teamNet}</b></span>
-            <span class="storico-metric">👥 Partecipazione <b>${x.votedCount}/${x.eligibleCount}</b></span>
+            ${isAdmin()?`<span class="storico-metric">👥 Partecipazione <b>${x.votedCount}/${x.eligibleCount}</b></span>`:''}
           </div>
           <div class="storico-table-wrap" style="margin-top:14px">
             <table class="storico-table">
-              <thead><tr><th>Player</th><th>Punti voto</th><th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th><th>Netto</th><th>Partecipazione</th></tr></thead>
+              <thead><tr><th>Player</th><th>Punti voto</th><th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th><th>Netto</th>${isAdmin()?'<th>Partecipazione</th>':''}</tr></thead>
               <tbody>${body}</tbody>
             </table>
           </div>
@@ -913,14 +904,14 @@ async function renderStoricoSquadra(){
       <td class="storico-season-net"><b>${r.net}</b></td><td>${r.voted}/${r.played}</td>
     </tr>`).join('');
     const seasonMobile=seasonRows.map((r,i)=>`<article class="storico-mobile-card storico-season-card">
-      <div class="storico-mobile-head"><b>${i+1}. ${escapeHtml(r.name)}</b><span class="storico-mobile-badge is-voted">${r.voted}/${r.played} voti</span></div>
+      <div class="storico-mobile-head"><b>${i+1}. ${escapeHtml(r.name)}</b>${isAdmin()?`<span class="storico-mobile-badge is-voted">${r.voted}/${r.played} voti</span>`:''}</div>
       <div class="storico-mobile-primary"><div><small>Punti voto</small><strong>${r.votePoints}</strong></div><div><small>Malus</small><strong>−${r.malus}</strong></div><div><small>Netto stagione</small><strong>${r.net}</strong></div></div>
       <div class="storico-mobile-cards"><span>Giornate ${r.played}</span><span>🟩 ${r.green}</span><span>🟨 ${r.yellow}</span><span>🟥 ${r.red}</span></div>
     </article>`).join('');
     const seasonRoot=document.createElement('div');
     seasonRoot.className='card storico-season-summary';
     seasonRoot.innerHTML=`<div class="storico-season-head"><div><span class="eyebrow">STAGIONE</span><h3>📈 Riepilogo totale stagione</h3><p class="muted">Totale delle giornate in cui ogni player è stato effettivamente schierato.</p></div></div>
-      ${seasonRows.length?`<div class="storico-table-wrap"><table class="storico-table storico-season-table"><thead><tr><th>Player</th><th>Giornate</th><th>Punti voto</th><th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th><th>Netto stagione</th><th>Voti</th></tr></thead><tbody>${seasonBody}</tbody></table></div><div class="storico-mobile-list" aria-label="Riepilogo stagione mobile">${seasonMobile}</div>`:`<p class="muted">Nessun dato stagionale disponibile.</p>`}`;
+      ${seasonRows.length?`<div class="storico-table-wrap"><table class="storico-table storico-season-table"><thead><tr><th>Player</th><th>Giornate</th><th>Punti voto</th><th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th><th>Netto stagione</th>${isAdmin()?'<th>Voti</th>':''}</tr></thead><tbody>${seasonBody}</tbody></table></div><div class="storico-mobile-list" aria-label="Riepilogo stagione mobile">${seasonMobile}</div>`:`<p class="muted">Nessun dato stagionale disponibile.</p>`}`;
     box.appendChild(seasonRoot);
   }catch(e){
     console.error('Classifiche Squadra:',e);
@@ -1204,118 +1195,6 @@ async function syncPublicResultsForAdmin(){
   }catch(e){ console.error('Sincronizzazione risultati pubblici:',e); }
 }
 
-async function calculateRanking(){
-  // Per l'Admin riallineiamo sempre gli aggregati pubblici ai voti reali
-  // prima di leggere la classifica. In questo modo eventuali cancellazioni
-  // manuali di documenti /votes non possono lasciare risultati fantasma.
-  if(isAdmin()) await syncPublicResultsForAdmin();
-  const map=Object.fromEntries(players.map(p=>[p.id,{...p,points:0,votes:0,first:0,second:0,third:0,malus:0,net:0}]));
-  if(!currentMatch) return [];
-  const activeTab=document.querySelector('.tab.active')?.dataset.tab || 'day';
-
-  // Le classifiche sono pubbliche per Player e Admin. I Player leggono
-  // esclusivamente gli aggregati pubblici, mai i documenti /votes/{uid}.
-  if(activeTab==='day'){
-    const snap=await db.collection('matches').doc(currentMatch.id).collection('publicResults').get();
-    snap.forEach(doc=>{
-      if(!map[doc.id]) return;
-      const d=doc.data()||{};
-      map[doc.id].points=statNum(d.points);
-      map[doc.id].votes=statNum(d.votes);
-      map[doc.id].first=statNum(d.first);
-      map[doc.id].second=statNum(d.second);
-      map[doc.id].third=statNum(d.third);
-      map[doc.id].malus=statNum(d.malus);
-      map[doc.id].net=statNum(map[doc.id].points)-statNum(map[doc.id].malus);
-    });
-    return Object.values(map)
-      .filter(p=>lineup.includes(p.id))
-      .sort((a,b)=>b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
-  }
-
-  // Classifica generale: tutti i giocatori della rosa devono comparire,
-  // compresi quelli che non sono mai entrati in distinta. I risultati
-  // pubblici di ogni partita vengono sommati senza esporre i singoli voti.
-  const results=await Promise.all(matches.map(async m=>{
-    const snap=await db.collection('matches').doc(m.id).collection('publicResults').get();
-    return snap.docs.map(d=>({id:d.id,...(d.data()||{})}));
-  }));
-  results.flat().forEach(d=>{
-    if(!map[d.id]) return;
-    map[d.id].points+=statNum(d.points);
-    map[d.id].votes+=statNum(d.votes);
-    map[d.id].first+=statNum(d.first);
-    map[d.id].second+=statNum(d.second);
-    map[d.id].third+=statNum(d.third);
-    map[d.id].malus+=statNum(d.malus);
-  });
-  Object.values(map).forEach(p=>{
-    p.points=statNum(p.points);
-    p.malus=statNum(p.malus);
-    p.net=p.points-p.malus;
-  });
-  return Object.values(map)
-    .sort((a,b)=>b.net-a.net||b.points-a.points||b.first-a.first||b.second-a.second||playerName(a).localeCompare(playerName(b),'it'));
-}
-async function recalculatePublicResults(){
-  if(!isAdmin()) return;
-  const btn=$('#recalculateResultsBtn');
-  if(btn){ btn.disabled=true; btn.textContent='⏳ Ricalcolo in corso...'; }
-  try{
-    await syncPublicResultsForAdmin();
-    await renderRanking();
-    alert('✅ Classifiche riallineate ai voti presenti in Firebase.');
-  }catch(e){
-    console.error('Ricalcolo classifiche:',e);
-    alert('❌ Impossibile ricalcolare le classifiche.');
-  }finally{
-    if(btn){ btn.disabled=false; btn.textContent='🔄 Ricalcola classifiche'; }
-  }
-}
-$('#recalculateResultsBtn')?.addEventListener('click',recalculatePublicResults);
-
-async function renderRanking(){
-  const rows=await calculateRanking();
-  const activeTab=document.querySelector('.tab.active')?.dataset.tab || 'day';
-  const title=activeTab==='season' ? 'Classifica generale' : `Classifica G${escapeHtml(currentMatch?.giornata||currentMatch?.day||'')}`;
-  const medalLabels=['🥇','🥈','🥉'];
-
-  if(!rows.length){
-    $('#rankingTable').innerHTML=`<div class="ranking-caption">${title}</div><p class="muted">Nessun risultato.</p>`;
-    return;
-  }
-
-  rows.forEach(p=>{
-    p.points=statNum(p.points);
-    p.malus=statNum(p.malus);
-    p.net=p.points-p.malus;
-    p.first=statNum(p.first); p.second=statNum(p.second); p.third=statNum(p.third);
-  });
-  const podium=rows.slice(0,3).map((p,i)=>`
-    <div class="ranking-podium-item podium-${i+1}">
-      <div class="ranking-medal">${medalLabels[i]}</div>
-      <div class="ranking-podium-name">${escapeHtml(playerName(p))}</div>
-      <div class="ranking-podium-points">${p.net} <span>pt netti</span></div>
-      <div class="ranking-score-detail"><span>Voti: <b>${p.points}</b> pt</span><span>Malus: <b>−${p.malus}</b> pt</span></div>
-      <div class="ranking-vote-breakdown"><span>🥇 ${p.first}</span><span>🥈 ${p.second}</span><span>🥉 ${p.third}</span></div>
-    </div>`).join('');
-
-  const rest=rows.slice(3).map((p,i)=>`
-    <div class="ranking-list-row">
-      <span class="ranking-position">${i+4}</span>
-      <div class="ranking-player-info">
-        <b>${escapeHtml(playerName(p))}</b>
-        <span class="ranking-score-detail"><span>Voti: <b>${p.points}</b> pt</span><span>Malus: <b>−${p.malus}</b> pt</span></span>
-        <span class="ranking-vote-breakdown"><span>🥇 ${p.first}</span><span>🥈 ${p.second}</span><span>🥉 ${p.third}</span></span>
-      </div>
-      <span class="ranking-list-points">${p.net} <small>pt netti</small></span>
-    </div>`).join('');
-
-  $('#rankingTable').innerHTML=`
-    <div class="ranking-caption">${title}</div>
-    <div class="ranking-podium">${podium}</div>
-    ${rest ? `<div class="ranking-list">${rest}</div>` : ''}`;
-}
 function renderPlayers(){
   $('#playersTable').innerHTML=players.map(p=>{
     const name=playerName(p), parts=name.trim().split(/\s+/).filter(Boolean);
@@ -1784,7 +1663,7 @@ $('#importCommit')?.addEventListener('click',commitImport);
 $('#importCancel')?.addEventListener('click',()=>{$('#importPreviewCard').classList.add('hidden');calendarDraft=[];$('#excelInput').value='';});
 
 function show(id){
-  if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return; if(id==='storicoSquadra'&&!isAdmin())return; if(!playerCanSeeScreen(id))return;
+  if(id==='admin'&&!isAdmin())return; if(id==='calendar'&&!isAdmin())return; if(!playerCanSeeScreen(id))return;
   if(id==='dashboard'){
     // La Home deve sempre ricalcolare la propria partita principale.
     // Aprire un vecchio match dal Calendario non deve trascinarlo nella Home.
@@ -1931,7 +1810,7 @@ function bfA352RenderSeasonSummary(playerTotals) {
           <thead><tr>
             <th>Player</th><th>Giornate</th><th>Punti voto</th>
             <th>🟩</th><th>🟨</th><th>🟥</th><th>Malus</th>
-            <th>Netto stagione</th><th>Voti</th>
+            <th>Netto stagione</th>${isAdmin()?'<th>Voti</th>':''}
           </tr></thead><tbody>`;
   if (!totals.length) {
     out += `<tr><td colspan="9" class="bf-a352-empty">Nessun dato disponibile.</td></tr>`;
