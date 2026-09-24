@@ -105,6 +105,35 @@ async function continueAfterVerified(user) {
   await showAuthenticatedArea(userData);
 }
 
+async function resetPassword() {
+  const emailInput = document.querySelector('#loginEmail');
+  const email = emailInput?.value.trim() || '';
+  if (!email) {
+    if (loginMsg) loginMsg.textContent = '📧 Inserisci prima il tuo indirizzo email.';
+    emailInput?.focus();
+    return;
+  }
+  if (!emailInput.checkValidity()) {
+    if (loginMsg) loginMsg.textContent = '❌ Inserisci un indirizzo email valido.';
+    emailInput?.focus();
+    return;
+  }
+  if (loginMsg) loginMsg.textContent = 'Invio del link di recupero...';
+  try {
+    await auth.sendPasswordResetEmail(email);
+    if (loginMsg) loginMsg.textContent = '📧 Ti abbiamo inviato il link per reimpostare la password. Controlla anche la cartella Spam.';
+  } catch (error) {
+    console.error('Recupero password:', error);
+    if (loginMsg) {
+      if (error.code === 'auth/invalid-email') loginMsg.textContent = '❌ L’indirizzo email non è valido.';
+      else if (error.code === 'auth/user-not-found') loginMsg.textContent = '❌ Non esiste un account associato a questa email.';
+      else if (error.code === 'auth/too-many-requests') loginMsg.textContent = '⏳ Troppe richieste. Attendi qualche minuto e riprova.';
+      else loginMsg.textContent = '❌ Non è stato possibile inviare il link di recupero. Riprova.';
+    }
+  }
+}
+
+document.querySelector('#forgotPasswordBtn')?.addEventListener('click', resetPassword);
 document.querySelector('#showRegisterBtn')?.addEventListener('click', showRegister);
 document.querySelector('#cancelRegisterBtn')?.addEventListener('click', ()=>showLogin());
 document.querySelector('#resendVerificationBtn')?.addEventListener('click', sendVerificationEmail);
