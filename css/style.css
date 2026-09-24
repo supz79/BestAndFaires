@@ -13,6 +13,10 @@ label{display:block;font-weight:700;margin:14px 0}select{display:block;width:100
 .rank{display:grid;grid-template-columns:45px 1fr 70px;align-items:center;padding:13px 4px;border-bottom:1px solid #eee}.rank:last-child{border-bottom:0}.rank .pos{font-size:21px}.points{text-align:right;font-weight:900}.sub{display:block;color:#6b7280;font-size:11px}.rule{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #eee}.rule:last-child{border:0}
 @media(max-width:650px){.two{grid-template-columns:1fr}.hero h1{font-size:28px}.hero-ball{font-size:55px}.match-meta{display:block}.match-meta span{display:block;margin:3px 0}}
 
+/* A-01 - Recupero password */
+.forgot-password-link{border:0;background:transparent;color:#166534;font:inherit;font-size:.9rem;font-weight:700;text-decoration:underline;cursor:pointer;padding:0;text-align:center}
+.forgot-password-link:hover{color:#0d6b32}
+
 /* Beta.3 Firebase Authentication */
 .login-card { max-width: 520px; margin: 48px auto; }
 .login-card form { display: grid; gap: 14px; }
