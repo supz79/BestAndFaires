@@ -1,200 +1,95 @@
-/* Best&Fairest 8.06 - HOTFIX CRITICO
- *
- * Corregge due regressioni:
- * 1) i Player non venivano riconosciuti come presenti nel tabellino;
- * 2) alcune registrazioni Player pending non venivano mostrate all'Admin.
- *
- * Il fix viene caricato dopo app.js e sostituisce solo le funzioni coinvolte.
- */
+/* Best&Fairest 8.06 - HOTFIX CRITICO */
 (function(){
   'use strict';
 
-  const asId = value => String(value ?? '');
-  const isPresentStat = st => {
-    if(!st) return false;
-    return Number(st.appearance) === 1 || st.appearance === true;
-  };
+  const asId=v=>String(v??'');
+  const isPresent=st=>!!st&&(Number(st.appearance)===1||st.appearance===true);
 
-  async function fixedLoadMatchStats(matchId=currentMatch?.id){
-    currentMatchStats = {};
-    if(!matchId) return currentMatchStats;
-
+  async function loadStatsDirect(matchId){
+    if(!matchId) return 0;
     try{
-      if(typeof waitForAuthReady === 'function') await waitForAuthReady();
-
-      // FIX: non dipendere dal currentMatch globale durante una richiesta async.
-      // Leggiamo la distinta direttamente dalla partita richiesta.
-      let matchData = (currentMatch && currentMatch.id === matchId) ? currentMatch : null;
-      if(!matchData){
-        const matchSnap = await db.collection('matches').doc(matchId).get();
-        if(!matchSnap.exists) return currentMatchStats;
-        matchData = {id:matchSnap.id,...(matchSnap.data()||{})};
-      }
-
-      const ids = Array.isArray(matchData.lineup)
-        ? [...new Set(matchData.lineup.map(asId).filter(Boolean))]
-        : [];
-      if(!ids.length) return currentMatchStats;
-
-      // Leggiamo esattamente i documenti dei giocatori in distinta.
-      // Questo evita qualsiasi dipendenza dall'ordine o dalla query della collection.
-      const snaps = await Promise.all(ids.map(id =>
-        db.collection('matches').doc(matchId).collection('stats').doc(id).get()
-      ));
-
-      snaps.forEach((snap,i)=>{
-        if(snap.exists){
-          currentMatchStats[ids[i]] = {id:ids[i],...(snap.data()||{})};
-        }
-      });
-
-      console.info('[BF 8.06] stats caricati', {
-        matchId,
-        lineup: ids.length,
-        stats: Object.keys(currentMatchStats).length,
-        presenti: Object.values(currentMatchStats).filter(isPresentStat).length
-      });
-    }catch(error){
-      console.error('[BF 8.06] errore caricamento stats:',error);
-    }
-
-    return currentMatchStats;
+      const matchSnap=await db.collection('matches').doc(matchId).get();
+      if(!matchSnap.exists) return 0;
+      const m=matchSnap.data()||{};
+      const ids=Array.isArray(m.lineup)?[...new Set(m.lineup.map(asId).filter(Boolean))]:[];
+      currentMatchStats={};
+      if(!ids.length) return 0;
+      const snaps=await Promise.all(ids.map(id=>db.collection('matches').doc(matchId).collection('stats').doc(id).get()));
+      snaps.forEach((s,i)=>{if(s.exists) currentMatchStats[ids[i]]={id:ids[i],...(s.data()||{})};});
+      const present=Object.values(currentMatchStats).filter(isPresent).length;
+      console.info('[BF 8.06] TABELLINO:',{matchId,lineup:ids.length,stats:Object.keys(currentMatchStats).length,present});
+      return present;
+    }catch(e){console.error('[BF 8.06] load stats:',e);return 0;}
   }
 
-  function fixedPlayerHasMatchPresence(playerId){
-    const st = currentMatchStats?.[asId(playerId)];
-    return isPresentStat(st);
-  }
-
-  function fixedPopulateVotes(){
-    const me = currentPlayer();
-    const eligible = players.filter(p =>
-      lineup.some(id => asId(id) === asId(p.id)) &&
-      fixedPlayerHasMatchPresence(p.id) &&
-      asId(p.id) !== asId(me?.id)
+  function rebuildVotingCard(){
+    if(!currentMatch||!isPlayer()||!votingWindowOpen(currentMatch)||!currentPlayerInLineup()) return;
+    const me=currentPlayer();
+    const eligible=players.filter(p=>
+      lineup.some(id=>asId(id)===asId(p.id)) &&
+      isPresent(currentMatchStats?.[p.id]) &&
+      asId(p.id)!==asId(me?.id)
     );
-
-    const selected={};
     [1,2,3].forEach(n=>{
-      const current=$('#vote'+n);
-      if(current) selected[n]=current.value;
-    });
-
-    [1,2,3].forEach(n=>{
-      const s=$('#vote'+n);
-      if(!s) return;
-      s.innerHTML='<option value="">Seleziona...</option>'+
-        eligible.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(playerName(p))}</option>`).join('');
-      const persisted=(localVoted && localVoteMatchId===currentMatch?.id)
-        ? localVoteRanking[n-1]
-        : '';
-      const wanted=persisted || selected[n] || '';
-      if(wanted && eligible.some(p=>asId(p.id)===asId(wanted))) s.value=wanted;
+      const s=$('#vote'+n); if(!s)return;
+      const old=s.value;
+      s.innerHTML='<option value="">Seleziona...</option>'+eligible.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(playerName(p))}</option>`).join('');
+      if(eligible.some(p=>asId(p.id)===asId(old))) s.value=old;
+      else if(localVoted&&localVoteMatchId===currentMatch.id&&localVoteRanking[n-1]&&eligible.some(p=>asId(p.id)===asId(localVoteRanking[n-1]))) s.value=localVoteRanking[n-1];
       s.disabled=localVoted;
     });
-
-    $('#submitVote').disabled = localVoted || eligible.length < 3;
-    if(localVoted){
-      $('#voteMsg').textContent='✅ Voto già registrato per questo account.';
-    }else if(eligible.length<3){
-      $('#voteMsg').textContent='⚠️ Servono almeno 3 giocatori con Presenza registrata per poter votare.';
-    }else{
-      $('#voteMsg').textContent='';
-    }
-
-    console.info('[BF 8.06] candidati voto', {
-      matchId:currentMatch?.id,
-      lineup:lineup.length,
-      presenti:Object.keys(currentMatchStats||{}).filter(id=>isPresentStat(currentMatchStats[id])).length,
-      eleggibili:eligible.length,
-      ids:eligible.map(p=>p.id)
-    });
+    $('#submitVote').disabled=localVoted||eligible.length<3;
+    const msg=$('#voteMsg');
+    if(msg) msg.textContent=localVoted?'✅ Voto già registrato per questo account.':eligible.length<3?'⚠️ Servono almeno 3 giocatori con Presenza registrata per poter votare.':'';
+    $('#votingCard')?.classList.remove('hidden');
+    console.info('[BF 8.06] VOTAZIONE:',{matchId:currentMatch.id,lineup:lineup.length,present:Object.values(currentMatchStats||{}).filter(isPresent).length,eligible:eligible.map(p=>playerName(p))});
   }
 
-  async function fixedLoadPendingRegistrations(){
-    const box=$('#pendingRegistrations');
-    if(!box || !isAdmin()) return;
-
-    const currentLeague = String(leagueId() || '').trim();
-    if(!currentLeague){
-      box.innerHTML='<p class="muted">Impossibile determinare la lega dell’Admin.</p>';
-      return;
-    }
-
+  async function loadPendingDirect(){
+    const box=$('#pendingRegistrations'); if(!box||!isAdmin())return;
+    const lid=String(leagueId()||'').trim();
+    if(!lid)return;
     try{
-      // Primo tentativo: query precisa sulla lega.
-      let docs=[];
-      try{
-        const snap=await db.collection('users').where('leagueId','==',currentLeague).get();
-        docs=snap.docs;
-      }catch(error){
-        console.warn('[BF 8.06] query utenti per lega fallita, provo fallback:',error);
-      }
-
-      // Fallback: recupera i pending e filtra la lega lato client.
-      // È utile se nella collection esistono profili legacy con campi incompleti.
-      if(!docs.length){
-        try{
-          const snap=await db.collection('users').where('registrationStatus','==','pending').get();
-          docs=snap.docs;
-        }catch(error){
-          console.warn('[BF 8.06] fallback pending fallito:',error);
-        }
-      }
-
-      const pending=docs
-        .map(d=>({id:d.id,...(d.data()||{})}))
-        .filter(u=>
-          u.role==='player' &&
-          String(u.leagueId||'').trim()===currentLeague &&
-          u.active!==true &&
-          (u.registrationStatus==='pending' || !u.playerId)
-        );
-
-      if(!pending.length){
-        box.innerHTML='<p class="muted">Nessuna registrazione in attesa.</p>';
-        console.info('[BF 8.06] nessun pending per lega',currentLeague);
-        return;
-      }
-
+      const snap=await db.collection('users').where('leagueId','==',lid).get();
+      const pending=snap.docs.map(d=>({id:d.id,...(d.data()||{})})).filter(u=>u.role==='player'&&u.active!==true&&(u.registrationStatus==='pending'||!u.playerId));
+      if(!pending.length){box.innerHTML='<p class="muted">Nessuna registrazione in attesa.</p>';return;}
       box.innerHTML=pending.map(u=>{
         const name=[u.nome,u.cognome].filter(Boolean).join(' ')||u.displayName||'Nome non indicato';
         const parts=name.trim().split(/\s+/).filter(Boolean);
-        const initials=((parts[0]?.[0]||'')+(parts.length>1?(parts[parts.length-1]?.[0]||''):'' )).toUpperCase();
+        const initials=((parts[0]?.[0]||'')+(parts.length>1?(parts.at(-1)?.[0]||''):'')).toUpperCase();
         return `<div class="admin-user-row pending-user"><span class="admin-avatar">${escapeHtml(initials)}</span><div class="admin-user-main"><b>${escapeHtml(name)}</b><span class="sub">${escapeHtml(u.email||'Email non disponibile')}</span></div><button class="primary small-action" data-associate-user="${escapeHtml(u.id)}">Associa</button></div>`;
       }).join('');
+      box.querySelectorAll('[data-associate-user]').forEach(btn=>btn.addEventListener('click',()=>associateRegistration(btn.dataset.associateUser)));
+      console.info('[BF 8.06] PENDING:',{leagueId:lid,count:pending.length,ids:pending.map(u=>u.id)});
+    }catch(e){console.error('[BF 8.06] load pending:',e);box.innerHTML='<p class="muted">Impossibile caricare le registrazioni.</p>';}
+  }
 
-      box.querySelectorAll('[data-associate-user]').forEach(btn=>
-        btn.addEventListener('click',()=>associateRegistration(btn.dataset.associateUser))
-      );
-
-      console.info('[BF 8.06] pending visualizzati',{
-        leagueId:currentLeague,
-        count:pending.length,
-        users:pending.map(u=>({id:u.id,email:u.email,playerId:u.playerId,status:u.registrationStatus,active:u.active}))
-      });
-    }catch(error){
-      console.error('[BF 8.06] errore registrazioni pending:',error);
-      box.innerHTML='<p class="muted">Impossibile caricare le registrazioni.</p>';
+  async function apply(){
+    if(!window.currentUserData||!firebase.auth().currentUser)return;
+    if(typeof waitForAuthReady==='function')await waitForAuthReady();
+    if(typeof loadPendingDirect==='function'&&isAdmin())await loadPendingDirect();
+    if(isPlayer()&&currentMatch){
+      const n=await loadStatsDirect(currentMatch.id);
+      if(n>=0){
+        lineup=Array.isArray(currentMatch.lineup)?[...currentMatch.lineup]:[];
+        rebuildVotingCard();
+        if(typeof renderMatch==='function')renderMatch();
+        rebuildVotingCard();
+      }
     }
   }
 
-  // Sostituzioni globali. Le funzioni originali sono dichiarazioni globali
-  // in app.js, quindi i riferimenti successivi usano queste versioni.
-  window.loadMatchStats = fixedLoadMatchStats;
-  window.playerHasMatchPresence = fixedPlayerHasMatchPresence;
-  window.populateVotes = fixedPopulateVotes;
-  window.loadPendingRegistrations = fixedLoadPendingRegistrations;
-
-  async function recheckAfterPatch(){
-    try{
-      if(!window.currentUserData || !firebase.auth().currentUser) return;
-      console.info('[BF 8.06] hotfix attivo, ricarico i dati della sessione');
-      if(typeof refresh==='function') await refresh();
-    }catch(error){
-      console.error('[BF 8.06] refresh post-hotfix fallito:',error);
-    }
-  }
-
-  window.addEventListener('load',()=>setTimeout(recheckAfterPatch,250));
+  // Il file è caricato dopo app.js tramite firebase.js, quindi qui possiamo
+  // lavorare direttamente sulle variabili globali lexicali dell'app.
+  window.BF806={apply,loadStatsDirect,rebuildVotingCard,loadPendingDirect};
+  window.addEventListener('load',()=>{
+    let tries=0;
+    const timer=setInterval(async()=>{
+      tries++;
+      if(window.currentUserData&&firebase.auth().currentUser){
+        clearInterval(timer);
+        await apply();
+      }else if(tries>=40) clearInterval(timer);
+    },500);
+  });
 })();
