@@ -24,3 +24,12 @@ const db = firebase.firestore();
 
 console.log("Best&Fairest Beta.2: Firebase inizializzato.");
 console.log("Firebase project:", firebaseConfig.projectId);
+
+// 8.06: carica l'hotfix SOLO dopo che tutti gli script principali, incluso
+// app.js, sono stati eseguiti. Questo evita di alterare l'ordine di bootstrap.
+window.addEventListener('load',()=>{
+  const s=document.createElement('script');
+  s.src='js/bugfix-8.06.js?v=8.06';
+  s.async=false;
+  document.body.appendChild(s);
+});
