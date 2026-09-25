@@ -65,31 +65,33 @@
   }
 
   async function apply(){
-    if(!window.currentUserData||!firebase.auth().currentUser)return;
+    if(!window.currentUserData||!firebase.auth().currentUser)return false;
     if(typeof waitForAuthReady==='function')await waitForAuthReady();
-    if(typeof loadPendingDirect==='function'&&isAdmin())await loadPendingDirect();
+    if(isAdmin())await loadPendingDirect();
     if(isPlayer()&&currentMatch){
-      const n=await loadStatsDirect(currentMatch.id);
-      if(n>=0){
-        lineup=Array.isArray(currentMatch.lineup)?[...currentMatch.lineup]:[];
-        rebuildVotingCard();
-        if(typeof renderMatch==='function')renderMatch();
-        rebuildVotingCard();
-      }
+      await loadStatsDirect(currentMatch.id);
+      lineup=Array.isArray(currentMatch.lineup)?[...currentMatch.lineup]:[];
+      // renderMatch usa le variabili lexicali originali dell'app, quindi dopo
+      // aver riempito currentMatchStats il suo populateVotes vede finalmente
+      // le presenze reali del tabellino.
+      if(typeof renderMatch==='function')renderMatch();
+      rebuildVotingCard();
     }
+    return true;
   }
 
-  // Il file è caricato dopo app.js tramite firebase.js, quindi qui possiamo
-  // lavorare direttamente sulle variabili globali lexicali dell'app.
   window.BF806={apply,loadStatsDirect,rebuildVotingCard,loadPendingDirect};
-  window.addEventListener('load',()=>{
-    let tries=0;
-    const timer=setInterval(async()=>{
-      tries++;
-      if(window.currentUserData&&firebase.auth().currentUser){
-        clearInterval(timer);
-        await apply();
-      }else if(tries>=40) clearInterval(timer);
-    },500);
-  });
+
+  // Questo script viene iniettato durante l'evento load: NON registriamo
+  // un secondo listener load, ma avviamo subito il controllo della sessione.
+  let tries=0;
+  const timer=setInterval(async()=>{
+    tries++;
+    if(window.currentUserData&&firebase.auth().currentUser){
+      clearInterval(timer);
+      await apply();
+    }else if(tries>=40){
+      clearInterval(timer);
+    }
+  },500);
 })();
